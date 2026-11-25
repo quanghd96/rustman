@@ -355,6 +355,25 @@ impl Builder {
         self.headers.contains(name) || self.removed.contains(&name.to_ascii_lowercase())
     }
 
+    fn take_body_file(&mut self) -> Option<String> {
+        if self.body_files.len() == 1
+            && !self.get
+            && !self.head
+            && !self.upload
+            && self.body.is_none()
+            && self.form.is_empty()
+        {
+            let file = self.body_files.pop().expect("exactly one file");
+            self.note(format!("Select {file} in Body to attach the binary file."));
+            Some(file)
+        } else {
+            for file in std::mem::take(&mut self.body_files) {
+                self.note_file_body(&file);
+            }
+            None
+        }
+    }
+
     fn finish(mut self) -> ParsedCurl {
         let mut url = self.url();
         if let Some(scheme) = self.unsupported_auth.take() {
@@ -396,22 +415,7 @@ impl Builder {
             }
         }
 
-        let body_file = if self.body_files.len() == 1
-            && !self.get
-            && !self.head
-            && !self.upload
-            && self.body.is_none()
-            && self.form.is_empty()
-        {
-            let file = self.body_files.pop().expect("exactly one file");
-            self.note(format!("Select {file} in Body to attach the binary file."));
-            Some(file)
-        } else {
-            for file in std::mem::take(&mut self.body_files) {
-                self.note_file_body(&file);
-            }
-            None
-        };
+        let body_file = self.take_body_file();
         let has_payload = self.body.is_some() || body_file.is_some() || !self.form.is_empty();
         let method = self.method.take().unwrap_or_else(|| {
             let method = if self.head {

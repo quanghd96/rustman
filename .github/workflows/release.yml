@@ -7,86 +7,47 @@ on:
     inputs:
       version:
         description: "Version to release (e.g. 1.2.3)"
-        required: false
+        required: true
         type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+  cancel-in-progress: false
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
-      release-id: ${{ steps.release.outputs.id }}
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
+      commit: ${{ steps.ver.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Determine version and tag
         id: ver
         env:
-          # Via env rather than inlined into the script: a `${{ }}` expansion
-          # is pasted in as raw text before bash sees it, so a value with
-          # shell metacharacters would run as code.
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            VERSION="$GITHUB_REF_NAME"
-          elif [[ -n "$INPUT_VERSION" ]]; then
-            VERSION="$INPUT_VERSION"
+            VERSION="${GITHUB_REF_NAME#v}"
           else
-            BASE=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-            VERSION="${BASE}-dev.${{ github.run_number }}"
+            VERSION="$INPUT_VERSION"
           fi
-
-          # Strip every leading "v", not just one. Cargo needs a bare semver
-          # ("0.3.13"), and the build jobs sed VERSION straight into
-          # Cargo.toml, so a stray prefix here fails the build with
-          # "unexpected character 'v' while parsing major version number".
-          # `${VERSION#v}` only ever removes one, which is how a `v0.3.13`
-          # dispatch input produced tag `vv0.3.13` and an unbuildable
-          # `version = "v0.3.13"`.
-          VERSION="$(printf '%s' "$VERSION" | sed 's/^v*//')"
-
-          # The tag is always derived from the normalised version, so the two
-          # cannot drift apart no matter which trigger fired.
-          TAG="v$VERSION"
-
-          # Fail here with something readable rather than 20 minutes later
-          # inside three parallel cargo builds.
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::'$VERSION' is not a valid Cargo version. Pass a bare semver like 0.3.13 (no leading 'v')." >&2
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Use a stable version like 1.2.3 or push the tag v1.2.3." >&2
             exit 1
           fi
-
-          echo "Version: $VERSION / Tag: $TAG"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        id: release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.ver.outputs.tag }}
-          name: "Rustman ${{ steps.ver.outputs.tag }}"
-          body: |
-            **Rustman ${{ steps.ver.outputs.tag }}**
-
-            Built from commit [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
-
-            Download the installer for your platform below. The app will also auto-update if you already have it installed.
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          printf 'version=%s\ntag=v%s\ncommit=%s\n' "$VERSION" "$VERSION" "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   # ── Rustman iced · Linux binary ───────────────────────────────────────────────
   build-linux-iced:
     name: Build · Rustman iced · Linux ${{ matrix.arch }}
     needs: prepare
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +63,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - name: Patch version in Cargo.toml
         env:
@@ -150,22 +113,23 @@ jobs:
           chmod +x dist/rustman/install-desktop-entry.sh dist/rustman/rustman
           tar czf rustman-linux-${{ matrix.arch }}.tar.gz -C dist rustman
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Linux release archive
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: rustman-linux-${{ matrix.arch }}.tar.gz
+          name: release-linux-${{ matrix.arch }}
+          path: rustman-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
 
   # ── Rustman iced · macOS universal binary ────────────────────────────────────
   build-macos-iced:
     name: Build · Rustman iced · macOS universal
     needs: prepare
-    permissions:
-      contents: write
     runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - name: Patch version in Cargo.toml
         env:
@@ -194,11 +158,6 @@ jobs:
             target/aarch64-apple-darwin/release/rustman \
             target/x86_64-apple-darwin/release/rustman \
             -output rustman-universal
-
-      - name: Package universal binary (for in-app self-update)
-        run: |
-          cp rustman-universal rustman
-          tar czf Rustman-macos-universal.tar.gz rustman
 
       - name: Build .app bundle
         env:
@@ -249,34 +208,33 @@ jobs:
           sips -z 256  256  public/icon.png --out AppIcon.iconset/icon_256x256.png
           iconutil -c icns AppIcon.iconset -o Rustman.app/Contents/Resources/AppIcon.icns
 
-      - name: Create DMG
+      - name: Package macOS release
         run: |
-          brew install create-dmg
-          create-dmg \
-            --volname "Rustman" \
-            --volicon "Rustman.app/Contents/Resources/AppIcon.icns" \
-            --window-size 800 400 \
-            --icon-size 120 \
-            --icon "Rustman.app" 200 185 \
-            --app-drop-link 600 185 \
-            --hide-extension "Rustman.app" \
-            "Rustman-macos-universal.dmg" \
-            "Rustman.app"
+          mkdir dmg
+          mv Rustman.app dmg/
+          ln -s /Applications dmg/Applications
+          codesign --force --sign - --timestamp=none dmg/Rustman.app
+          codesign --verify --deep --strict dmg/Rustman.app
+          # The full bundle updates a DMG install. Keep the bare executable
+          # first for standalone users and older versions of the updater.
+          cp rustman-universal rustman
+          COPYFILE_DISABLE=1 tar czf Rustman-macos-universal.tar.gz rustman -C dmg Rustman.app
+          hdiutil create -srcfolder dmg -volname Rustman -fs HFS+ -format UDZO Rustman-macos-universal.dmg
+          hdiutil verify Rustman-macos-universal.dmg
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload macOS release archives
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: |
+          name: release-macos
+          path: |
             Rustman-macos-universal.dmg
             Rustman-macos-universal.tar.gz
+          if-no-files-found: error
 
   # ── Rustman iced · Windows ───────────────────────────────────────────────────
   build-windows-iced:
     name: Build · Rustman iced · Windows ${{ matrix.arch }}
     needs: prepare
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -289,6 +247,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - name: Patch version in Cargo.toml
         shell: pwsh
@@ -311,35 +271,109 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path target\release\rustman.exe -DestinationPath rustman-windows-${{ matrix.arch }}.zip
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Windows release archive
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: rustman-windows-${{ matrix.arch }}.zip
+          name: release-windows-${{ matrix.arch }}
+          path: rustman-windows-${{ matrix.arch }}.zip
+          if-no-files-found: error
 
-  # ── Checksums the in-app updater verifies downloads against ──────────────────
-  checksums:
-    name: Publish SHA256SUMS
+  publish:
+    name: Verify and publish release
     needs: [prepare, build-linux-iced, build-macos-iced, build-windows-iced]
     permissions:
       contents: write
     runs-on: ubuntu-latest
-
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.commit }}
     steps:
-      - name: Hash the release archives
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+
+      - name: Verify assets and generate SHA256SUMS
+        working-directory: assets
         run: |
           set -euo pipefail
-          mkdir assets
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets \
-            --pattern '*.tar.gz' --pattern '*.zip' --pattern '*.dmg'
-          (cd assets && sha256sum -- *) > SHA256SUMS
-          cat SHA256SUMS
+          archives=(
+            rustman-linux-x86_64.tar.gz
+            rustman-linux-aarch64.tar.gz
+            Rustman-macos-universal.tar.gz
+            Rustman-macos-universal.dmg
+            rustman-windows-x86_64.zip
+            rustman-windows-aarch64.zip
+          )
+          for archive in "${archives[@]}"; do
+            if [[ ! -s "$archive" ]]; then
+              echo "::error::Missing or empty release asset: $archive" >&2
+              exit 1
+            fi
+          done
+          sha256sum -- "${archives[@]}" > SHA256SUMS
+          sha256sum --check SHA256SUMS
 
-      - name: Upload to GitHub Release
+      - name: Verify tag and release
+        run: |
+          set -euo pipefail
+          refs=$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          target=$(awk -v tag="refs/tags/$TAG" '
+            $2 == tag { direct = $1 }
+            $2 == tag "^{}" { peeled = $1 }
+            END { print (peeled ? peeled : direct) }
+          ' <<< "$refs")
+          if [[ -n "$target" && "$target" != "$RELEASE_SHA" ]] ||
+             [[ "$GITHUB_REF_TYPE" == "tag" && -z "$target" ]]; then
+            echo "::error::Tag $TAG does not point to the commit that was built." >&2
+            exit 1
+          fi
+          existing=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | [.draft, .target_commitish] | @tsv")
+          if [[ -n "$existing" && "$existing" != $'true\t'"$RELEASE_SHA" ]]; then
+            echo "::error::Release $TAG is already published or was drafted from a different commit." >&2
+            exit 1
+          fi
+
+      - name: Upload all files to a draft release
+        id: draft
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          files: SHA256SUMS
+          target_commitish: ${{ needs.prepare.outputs.commit }}
+          name: Rustman ${{ needs.prepare.outputs.tag }}
+          body: Built from commit [${{ needs.prepare.outputs.commit }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ needs.prepare.outputs.commit }}).
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            assets/rustman-linux-x86_64.tar.gz
+            assets/rustman-linux-aarch64.tar.gz
+            assets/Rustman-macos-universal.tar.gz
+            assets/Rustman-macos-universal.dmg
+            assets/rustman-windows-x86_64.zip
+            assets/rustman-windows-aarch64.zip
+            assets/SHA256SUMS
+
+      - name: Publish the complete release
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
+        run: |
+          set -euo pipefail
+          release="repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          uploaded=$(gh api "$release" --jq '.assets[] | select(.state == "uploaded") | .name')
+          expected=$(awk '{ print $2 }' assets/SHA256SUMS)
+          for asset in $expected SHA256SUMS; do
+            if ! grep -Fxq "$asset" <<< "$uploaded"; then
+              echo "::error::Draft release is missing $asset." >&2
+              exit 1
+            fi
+          done
+          gh api --method PATCH "$release" -F draft=false --jq .html_url

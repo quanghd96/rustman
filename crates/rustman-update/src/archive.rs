@@ -12,6 +12,10 @@ const BIN_NAME: &str = "rustman.exe";
 /// running executable. Blocking: decompression and file I/O.
 pub(crate) fn replace_running_binary(archive: &[u8]) -> Result<(), UpdateError> {
     let current = std::env::current_exe()?;
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = installed_bundle(&current) {
+        return replace_bundle(archive, bundle);
+    }
     let tmp = current
         .parent()
         .ok_or(UpdateError::NoExeDir)?
@@ -23,6 +27,56 @@ pub(crate) fn replace_running_binary(archive: &[u8]) -> Result<(), UpdateError> 
     if let Err(e) = std::fs::remove_file(&tmp) {
         eprintln!("rustman: could not remove {}: {e}", tmp.display());
     }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn installed_bundle(exe: &Path) -> Option<&Path> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    (macos.ends_with("MacOS") && contents.ends_with("Contents") && bundle.extension()?.eq("app"))
+        .then_some(bundle)
+}
+
+/// Keep the executable, Info.plist and signature from the same release.
+#[cfg(target_os = "macos")]
+fn replace_bundle(archive: &[u8], current: &Path) -> Result<(), UpdateError> {
+    use rustix::fs::{CWD, RenameFlags, renameat_with};
+    use std::process::Command;
+
+    let parent = current.parent().ok_or(UpdateError::NoExeDir)?;
+    let staging = tempfile::Builder::new()
+        .prefix(".rustman-update-")
+        .tempdir_in(parent)?;
+    let bundle_name = Path::new("Rustman.app");
+    let mut tarball = tar::Archive::new(flate2::read::GzDecoder::new(archive));
+    let mut size = 0u64;
+    for entry in tarball.entries()? {
+        let mut entry = entry?;
+        if !entry.path()?.starts_with(bundle_name) {
+            continue;
+        }
+        let kind = entry.header().entry_type();
+        size = size.saturating_add(entry.size());
+        if size > 256 * 1024 * 1024
+            || !(kind.is_file() || kind.is_dir())
+            || !entry.unpack_in(staging.path())?
+        {
+            return Err(UpdateError::InvalidBundle);
+        }
+    }
+
+    let next = staging.path().join(bundle_name);
+    verify_binary(&next.join("Contents/MacOS/rustman"))?;
+    let verification = Command::new("/usr/bin/codesign")
+        .args(["--verify", "--deep", "--strict"])
+        .arg(&next)
+        .output()?;
+    if !verification.status.success() {
+        return Err(UpdateError::InvalidBundle);
+    }
+    renameat_with(CWD, &next, CWD, current, RenameFlags::EXCHANGE).map_err(std::io::Error::from)?;
     Ok(())
 }
 
@@ -157,6 +211,51 @@ mod tests {
         let out = Scratch::new("missing");
         let err = extract_binary(&tarball("rustman/README", b"hi"), &out.0).unwrap_err();
         assert_eq!(err.to_string(), "'rustman' not found in archive");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_macos_bundle_update_swaps_the_executable_plist_and_signature_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let current = dir.path().join("Installed.app");
+        std::fs::create_dir(&current).unwrap();
+        std::fs::write(current.join("old"), "keep until verified").unwrap();
+
+        let replacement = dir.path().join("Rustman.app");
+        let macos = replacement.join("Contents/MacOS");
+        std::fs::create_dir_all(&macos).unwrap();
+        std::fs::copy("/usr/bin/true", macos.join("rustman")).unwrap();
+        let plist = r#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>io.rustman.update-test</string>
+<key>CFBundleExecutable</key><string>rustman</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleVersion</key><string>0.4.1</string>
+</dict></plist>"#;
+        std::fs::write(replacement.join("Contents/Info.plist"), plist).unwrap();
+        let signed = std::process::Command::new("/usr/bin/codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(&replacement)
+            .output()
+            .unwrap();
+        assert!(signed.status.success(), "{:?}", signed.stderr);
+
+        assert!(replace_bundle(&tarball("rustman", b"invalid"), &current).is_err());
+        assert!(current.join("old").is_file());
+        let gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        let mut archive = tar::Builder::new(gz);
+        archive.append_dir_all("Rustman.app", &replacement).unwrap();
+        let bytes = archive.into_inner().unwrap().finish().unwrap();
+        replace_bundle(&bytes, &current).unwrap();
+        assert!(!current.join("old").exists());
+        assert_eq!(
+            std::fs::read_to_string(current.join("Contents/Info.plist")).unwrap(),
+            plist
+        );
+        assert_eq!(
+            installed_bundle(&current.join("Contents/MacOS/rustman")),
+            Some(current.as_path())
+        );
     }
 
     #[test]

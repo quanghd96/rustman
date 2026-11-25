@@ -136,7 +136,10 @@
                       "src": "front.png",
                       "contentType": "image/png"
                     }
-                  ]
+                  ],
+                  "options": {
+                    "rustmanFormEncoding": "auto"
+                  }
                 }
               }
             }

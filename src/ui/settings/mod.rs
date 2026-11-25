@@ -210,7 +210,7 @@ fn hint<'a>(t: &'static Tokens, s: &'a str) -> iced::widget::Text<'a> {
 }
 
 /// A setting with its label and hint on the left and its control on the right.
-pub(crate) fn setting_row<'a>(t: &'static Tokens, label: &'static str, description: &'static str, control: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+pub(crate) fn setting_row<'a>(t: &'static Tokens, label: &'static str, description: &'a str, control: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     row![
         column![body_text(t, label), hint(t, description)].width(Length::Fill),
         control.into(),

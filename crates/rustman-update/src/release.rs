@@ -1,6 +1,7 @@
-use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue};
+use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue, LOCATION};
 use reqwest::redirect::Policy;
-use reqwest::{Client, Url};
+use reqwest::{Client, Response, StatusCode, Url};
+use semver::Version;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
@@ -8,8 +9,14 @@ use crate::archive;
 use crate::error::UpdateError;
 use crate::{Asset, UpdateInfo};
 
-const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/rust-man-org/rustman/releases/latest";
+const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+
+fn api_url(path: &str) -> String {
+    let repo = REPOSITORY
+        .strip_prefix("https://github.com/")
+        .expect("GitHub repository URL");
+    format!("https://api.github.com/repos/{repo}/releases/{path}")
+}
 
 /// The archive type the updater installs. The macOS release also uploads a
 /// DMG whose name holds the same platform token, so the name alone can't
@@ -29,7 +36,7 @@ struct GhRelease {
 #[derive(Deserialize, Debug)]
 struct GhAsset {
     name: String,
-    browser_download_url: String,
+    id: u64,
 }
 
 /// The checksum list the release workflow uploads, in `sha256sum` format.
@@ -56,52 +63,55 @@ const TOKEN_VAR: &str = "RUSTMAN_GITHUB_TOKEN";
 pub(crate) async fn check(current: &str) -> Result<Option<UpdateInfo>, UpdateError> {
     let target = asset_target()?;
     let release = fetch_latest(current).await?;
-    let latest = latest_version(&release);
-    if !version_gt(&latest, current) {
+    update_for_release(&release, current, target)
+}
+
+fn update_for_release(
+    release: &GhRelease,
+    current: &str,
+    target: &'static str,
+) -> Result<Option<UpdateInfo>, UpdateError> {
+    let latest = release
+        .tag_name
+        .strip_prefix('v')
+        .unwrap_or(&release.tag_name);
+    if !version_gt(latest, current)? {
         return Ok(None);
     }
-    let archive = pick_asset(&release.assets, &latest, target, ASSET_EXTENSION)?;
+    let archive = pick_asset(&release.assets, latest, target, ASSET_EXTENSION)?;
     let checksums = release
         .assets
         .iter()
         .find(|a| a.name == CHECKSUMS_ASSET)
-        .map(|a| trusted(&a.browser_download_url))
-        .transpose()?;
+        .ok_or_else(|| UpdateError::MissingChecksums(latest.to_owned()))?;
     Ok(Some(UpdateInfo {
-        version: latest,
+        version: latest.to_owned(),
         current: current.to_owned(),
         asset: Asset {
             name: archive.name.clone(),
-            url: trusted(&archive.browser_download_url)?,
-            checksums,
+            id: archive.id,
+            checksums: checksums.id,
         },
     }))
 }
 
 /// Installs exactly the release `update` describes, which [`check`] found
-/// and the user accepted, after making sure it is still newer than
-/// `current` and, when the release lists checksums, that the archive
-/// matches its own.
+/// and the user accepted, after verifying its version and checksum.
 pub(crate) async fn install(update: &UpdateInfo, current: &str) -> Result<String, UpdateError> {
-    if !version_gt(&update.version, current) {
+    if !version_gt(&update.version, current)? {
         return Err(UpdateError::NotNewer {
             version: update.version.clone(),
             current: current.to_owned(),
         });
     }
-    let client = download_client(current)?;
+    let api = api_client(current)?;
+    let storage = download_client(current)?;
     let asset = &update.asset;
-    let archive = download(&client, &asset.url, MAX_ARCHIVE_BYTES).await?;
-    if let Some(checksums) = &asset.checksums {
-        let checksums = download(&client, checksums, MAX_CHECKSUMS_BYTES).await?;
-        verify(&archive, &asset.name, &checksums)?;
-    }
+    let checksums = download_asset(&api, &storage, asset.checksums, MAX_CHECKSUMS_BYTES).await?;
+    let archive = download_asset(&api, &storage, asset.id, MAX_ARCHIVE_BYTES).await?;
+    verify(&archive, &asset.name, &checksums)?;
     tokio::task::spawn_blocking(move || archive::replace_running_binary(&archive)).await??;
     Ok(update.version.clone())
-}
-
-fn latest_version(release: &GhRelease) -> String {
-    release.tag_name.trim_start_matches('v').to_owned()
 }
 
 /// The asset token for this platform and CPU, or why there is none.
@@ -147,7 +157,8 @@ fn api_client(current: &str) -> Result<Client, UpdateError> {
     );
     if let Ok(token) = std::env::var(TOKEN_VAR) {
         match HeaderValue::from_str(&format!("Bearer {token}")) {
-            Ok(value) => {
+            Ok(mut value) => {
+                value.set_sensitive(true);
                 headers.insert(AUTHORIZATION, value);
             }
             Err(_) => eprintln!("rustman: ignoring a {TOKEN_VAR} that isn't a valid header"),
@@ -156,6 +167,7 @@ fn api_client(current: &str) -> Result<Client, UpdateError> {
     Ok(Client::builder()
         .user_agent(format!("rustman/{current}"))
         .default_headers(headers)
+        .redirect(Policy::none())
         .build()?)
 }
 
@@ -168,8 +180,7 @@ fn download_client(current: &str) -> Result<Client, UpdateError> {
         } else if is_trusted(attempt.url()) {
             attempt.follow()
         } else {
-            let to = attempt.url().to_string();
-            attempt.error(format!("refusing a redirect to {to}"))
+            attempt.error("refusing a redirect outside GitHub release storage")
         }
     });
     Ok(Client::builder()
@@ -179,25 +190,52 @@ fn download_client(current: &str) -> Result<Client, UpdateError> {
 }
 
 async fn fetch_latest(current: &str) -> Result<GhRelease, UpdateError> {
-    Ok(api_client(current)?
-        .get(LATEST_RELEASE_API)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<GhRelease>()
-        .await?)
+    let response = api_client(current)?.get(api_url("latest")).send().await?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(UpdateError::NoRelease(REPOSITORY));
+    }
+    Ok(response.error_for_status()?.json::<GhRelease>().await?)
 }
 
-/// `url` when it is HTTPS on one of the [`DOWNLOAD_HOSTS`].
-fn trusted(url: &str) -> Result<String, UpdateError> {
-    match Url::parse(url) {
-        Ok(parsed) if is_trusted(&parsed) => Ok(url.to_owned()),
-        _ => Err(UpdateError::Untrusted(url.to_owned())),
-    }
+/// Use the authenticated asset API for private and public releases. The API
+/// can either stream the bytes or send a redirect to credential-free storage.
+async fn download_asset(
+    api: &Client,
+    storage: &Client,
+    id: u64,
+    limit: usize,
+) -> Result<Vec<u8>, UpdateError> {
+    let response = api
+        .get(api_url(&format!("assets/{id}")))
+        .header(ACCEPT, "application/octet-stream")
+        .send()
+        .await?;
+    let response = if response.status().is_redirection() {
+        let url = response
+            .headers()
+            .get(LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| Url::parse(value).ok())
+            .ok_or(UpdateError::BadRedirect)?;
+        if !is_trusted(&url) {
+            return Err(UpdateError::UntrustedRedirect);
+        }
+        storage
+            .get(url)
+            .send()
+            .await
+            .map_err(reqwest::Error::without_url)?
+    } else {
+        response
+    };
+    read_download(response, limit).await
 }
 
 fn is_trusted(url: &Url) -> bool {
     url.scheme() == "https"
+        && url.port().is_none()
+        && url.username().is_empty()
+        && url.password().is_none()
         && url
             .host_str()
             .is_some_and(|host| DOWNLOAD_HOSTS.contains(&host))
@@ -205,8 +243,10 @@ fn is_trusted(url: &Url) -> bool {
 
 /// The body at `url`, read as it streams in, and refused once it passes
 /// `limit` bytes.
-async fn download(client: &Client, url: &str, limit: usize) -> Result<Vec<u8>, UpdateError> {
-    let mut response = client.get(url).send().await?.error_for_status()?;
+async fn read_download(response: Response, limit: usize) -> Result<Vec<u8>, UpdateError> {
+    let mut response = response
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?;
     let expected = response
         .content_length()
         .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX));
@@ -214,7 +254,11 @@ async fn download(client: &Client, url: &str, limit: usize) -> Result<Vec<u8>, U
         return Err(UpdateError::TooLarge(limit));
     }
     let mut body = Vec::with_capacity(expected);
-    while let Some(chunk) = response.chunk().await? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(reqwest::Error::without_url)?
+    {
         if body.len() + chunk.len() > limit {
             return Err(UpdateError::TooLarge(limit));
         }
@@ -268,18 +312,10 @@ fn pick_asset<'a>(
         })
 }
 
-/// Whether `MAJOR.MINOR.PATCH` version `a` is newer than `b`. Pre-release
-/// and build suffixes are ignored, so a dev build of the current version is
-/// not an update.
-fn version_gt(a: &str, b: &str) -> bool {
-    parse_version(a) > parse_version(b)
-}
-
-fn parse_version(v: &str) -> (u64, u64, u64) {
-    let core = v.split(['-', '+']).next().unwrap_or(v);
-    let mut parts = core.split('.').map(|x| x.trim().parse().unwrap_or(0));
-    let mut next = || parts.next().unwrap_or(0);
-    (next(), next(), next())
+/// Compare semantic version precedence, including prereleases and ignoring build metadata.
+fn version_gt(a: &str, b: &str) -> Result<bool, UpdateError> {
+    let parse = |v: &str| Version::parse(v).map_err(|_| UpdateError::InvalidVersion(v.to_owned()));
+    Ok(parse(a)?.cmp_precedence(&parse(b)?).is_gt())
 }
 
 #[cfg(test)]
@@ -288,19 +324,46 @@ mod tests {
 
     #[test]
     fn version_compare() {
-        assert!(version_gt("0.4.0", "0.3.2"));
-        assert!(version_gt("1.0.0", "0.9.9"));
-        assert!(version_gt("0.3.10", "0.3.2"));
-        assert!(!version_gt("0.3.2", "0.3.2"));
-        assert!(!version_gt("0.3.1", "0.3.2"));
-        assert!(!version_gt("0.3.2-dev.5", "0.3.2"));
+        assert!(version_gt("0.4.0", "0.3.2").unwrap());
+        assert!(version_gt("1.0.0", "0.9.9").unwrap());
+        assert!(version_gt("0.3.10", "0.3.2").unwrap());
+        assert!(version_gt("0.3.2", "0.3.2-dev.5").unwrap());
+        assert!(!version_gt("0.3.2+build.2", "0.3.2+build.1").unwrap());
+        assert!(!version_gt("0.3.1", "0.3.2").unwrap());
+        assert!(!version_gt("0.3.2-dev.5", "0.3.2").unwrap());
+        assert!(version_gt("0.3.2-dev.10", "0.3.2-dev.9").unwrap());
+        assert!(version_gt("0.3", "0.3.2").is_err());
     }
 
     fn asset(name: &str) -> GhAsset {
         GhAsset {
             name: name.to_owned(),
-            browser_download_url: format!("https://example.test/{name}"),
+            id: 123,
         }
+    }
+
+    #[test]
+    fn a_newer_release_needs_platform_asset_and_checksums() {
+        let name = format!("rustman-macos-universal{ASSET_EXTENSION}");
+        let mut release = GhRelease {
+            tag_name: "v0.4.1".into(),
+            assets: vec![asset(&name)],
+        };
+        assert!(matches!(
+            update_for_release(&release, "0.4.0", "macos-universal"),
+            Err(UpdateError::MissingChecksums(version)) if version == "0.4.1"
+        ));
+        release.assets.push(GhAsset {
+            name: CHECKSUMS_ASSET.into(),
+            id: 456,
+        });
+        let update = update_for_release(&release, "0.4.0", "macos-universal")
+            .unwrap()
+            .unwrap();
+        assert_eq!(update.version, "0.4.1");
+        assert_eq!(update.asset.name, name);
+        assert_eq!(update.asset.id, 123);
+        assert_eq!(update.asset.checksums, 456);
     }
 
     #[test]
@@ -373,11 +436,11 @@ mod tests {
     #[test]
     fn only_https_github_downloads_are_trusted() {
         for url in [
-            "https://github.com/rust-man-org/rustman/releases/download/v1/a.zip",
+            "https://github.com/quanghd96/rustman/releases/download/v1/a.zip",
             "https://objects.githubusercontent.com/x",
             "https://release-assets.githubusercontent.com/x",
         ] {
-            assert!(trusted(url).is_ok(), "{url}");
+            assert!(Url::parse(url).is_ok_and(|url| is_trusted(&url)), "{url}");
         }
         for url in [
             "http://github.com/a.zip",
@@ -385,7 +448,7 @@ mod tests {
             "https://evil.test/github.com/a.zip",
             "not a url",
         ] {
-            assert!(trusted(url).is_err(), "{url}");
+            assert!(!Url::parse(url).is_ok_and(|url| is_trusted(&url)), "{url}");
         }
     }
 
@@ -395,8 +458,8 @@ mod tests {
             current: "1.0.0".to_owned(),
             asset: Asset {
                 name: "a.zip".into(),
-                url: "https://github.com/a.zip".into(),
-                checksums: None,
+                id: 123,
+                checksums: 456,
             },
         }
     }
@@ -428,18 +491,23 @@ mod tests {
         let client = Client::new();
         let declared = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n".to_vec());
         assert!(matches!(
-            download(&client, &declared, 10).await,
+            read_download(client.get(declared).send().await.unwrap(), 10).await,
             Err(UpdateError::TooLarge(10))
         ));
 
         let mut chunked = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n".to_vec();
         chunked.extend_from_slice(b"8\r\n12345678\r\n8\r\n12345678\r\n0\r\n\r\n");
         assert!(matches!(
-            download(&client, &serve(chunked), 10).await,
+            read_download(client.get(serve(chunked)).send().await.unwrap(), 10).await,
             Err(UpdateError::TooLarge(10))
         ));
 
         let small = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc".to_vec());
-        assert_eq!(download(&client, &small, 10).await.unwrap(), b"abc");
+        assert_eq!(
+            read_download(client.get(small).send().await.unwrap(), 10)
+                .await
+                .unwrap(),
+            b"abc"
+        );
     }
 }

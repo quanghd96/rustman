@@ -4,12 +4,14 @@ description = "Rustman's self-update from GitHub releases"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+repository.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
 reqwest.workspace = true
 self-replace.workspace = true
+semver = "1"
 serde.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
@@ -21,6 +23,10 @@ tar.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 zip.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+tempfile = "3"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

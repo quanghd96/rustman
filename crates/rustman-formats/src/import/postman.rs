@@ -244,6 +244,8 @@ struct PostmanBody {
 #[derive(Deserialize)]
 struct PostmanBodyOptions {
     raw: Option<PostmanRawOptions>,
+    #[serde(rename = "rustmanFormEncoding")]
+    rustman_form_encoding: Option<String>,
 }
 
 /// What a raw body's text is: `json`, `text`, `xml`, `html` or `javascript`.
@@ -600,7 +602,16 @@ impl ImportedBody {
                 ..Self::new(BodyType::Binary, String::new())
             },
             Some("formdata") => Self::form(
-                BodyType::Multipart,
+                if body
+                    .options
+                    .as_ref()
+                    .and_then(|options| options.rustman_form_encoding.as_deref())
+                    == Some("auto")
+                {
+                    BodyType::FormData
+                } else {
+                    BodyType::Multipart
+                },
                 body.formdata.iter().flatten().map(formdata_field).collect(),
             ),
             Some("urlencoded") => Self::form(
@@ -861,12 +872,20 @@ fn export_body(req: &SavedRequest) -> Value {
     match req.body_type {
         BodyType::Json => raw_body(&req.body, "json"),
         BodyType::Text => raw_body(&req.body, "text"),
-        BodyType::FormData => export_form(
-            &req.form_data_fields,
-            req.form_data_fields
+        BodyType::FormData => {
+            let mut files = req
+                .form_data_fields
                 .iter()
-                .any(|field| field.field_type == FormFieldType::File),
-        ),
+                .filter(|field| field.field_type == FormFieldType::File)
+                .peekable();
+            let mut body = export_form(&req.form_data_fields, files.peek().is_some());
+            // Keep disabled file rows in the Postman form without forcing
+            // multipart when an older Rustman request is imported back.
+            if files.peek().is_some() && !files.any(|field| field.enabled) {
+                body["options"] = json!({ "rustmanFormEncoding": "auto" });
+            }
+            body
+        }
         BodyType::Multipart => export_form(&req.form_data_fields, true),
         BodyType::UrlEncoded => export_form(&req.form_data_fields, false),
         BodyType::Binary => json!({
@@ -1319,14 +1338,17 @@ mod import_export_tests {
                 want.name
             );
             let expected_type = if want.body_type == BodyType::FormData {
-                if want
+                let mut files = want
                     .form_data_fields
                     .iter()
-                    .any(|field| field.field_type == FormFieldType::File)
-                {
+                    .filter(|field| field.field_type == FormFieldType::File)
+                    .peekable();
+                if files.peek().is_none() {
+                    BodyType::UrlEncoded
+                } else if files.any(|field| field.enabled) {
                     BodyType::Multipart
                 } else {
-                    BodyType::UrlEncoded
+                    BodyType::FormData
                 }
             } else {
                 want.body_type.clone()

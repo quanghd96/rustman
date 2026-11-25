@@ -4,7 +4,7 @@ A free and open source API client built in Rust with iced. Native, no webview.
 
 I got tired of API clients that want an account, take hundreds of megabytes, and ship a whole browser to send an HTTP request, so I built my own. It stores your work locally and can sync saved collections to a bucket you configure.
 
-**[Download](https://github.com/rust-man-org/rustman/releases/latest)** · **[Website](https://rust-man-org.github.io/rustman/)** · **[Discord](https://discord.gg/vfa8rKYzKG)**
+**[Download](https://github.com/quanghd96/rustman/releases/latest)** · **[Docs](docs/index.html)** · **[Discord](https://discord.gg/vfa8rKYzKG)**
 
 ---
 
@@ -16,7 +16,7 @@ I got tired of API clients that want an account, take hundreds of megabytes, and
 - **About 115 bugs fixed**, from cURL paste and Postman import to data safety.
 - **Faster requests and history.** Opening a request or a history entry took 1–3 s. It now takes a few milliseconds.
 - **Saving in the background.** With a 5 MB request open, autosave froze the window for about 0.1 s. It now takes about 1 ms, and quitting always writes the latest changes first.
-- **`rustman-cli run`**, a command line runner for collections ([#19](https://github.com/rust-man-org/rustman/issues/19)).
+- **`rustman-cli run`**, a command line runner for collections.
 
 ## Free, and staying that way
 
@@ -125,7 +125,7 @@ test("user is an admin", contains(response.json().roles, "admin"))
 
 It is a substring test on a string, a membership test on a list and a key test on an object. `haystack.contains(needle)` is the same function.
 
-Full grammar, built-ins, limits, and a copy-pasteable **LLM prompt** that writes scripts for you: [rust-man-org.github.io/rustman/scripting.html](https://rust-man-org.github.io/rustman/scripting.html).
+Full grammar, built-ins, limits, and a copy-pasteable **LLM prompt** that writes scripts for you: [Scripting reference](docs/scripting.html).
 
 ## Command line
 
@@ -163,7 +163,7 @@ A few things are still missing.
 
 ## Download
 
-Grab the latest build from the [releases page](https://github.com/rust-man-org/rustman/releases/latest).
+Grab the latest build from the [releases page](https://github.com/quanghd96/rustman/releases/latest).
 
 | Platform | File |
 |---|---|
@@ -173,7 +173,7 @@ Grab the latest build from the [releases page](https://github.com/rust-man-org/r
 | Linux x86_64 | `rustman-linux-x86_64.tar.gz` |
 | Linux arm64 | `rustman-linux-aarch64.tar.gz` |
 
-From 0.4.0 on, each release also has a `SHA256SUMS` file for checking the downloads.
+Each release includes a `SHA256SUMS` file. The app checks the downloaded update against it before installing. For a private repository, launch Rustman with the environment variable `RUSTMAN_GITHUB_TOKEN` set to a GitHub token with read access to the repository's contents.
 
 The Linux archive holds the binary, its icon and desktop entry, and `install-desktop-entry.sh`, which installs the last two for your user so the app shows its own icon. The binary has no WebKitGTK, GTK or PDF runtime dependency. HTML responses show as readable text, and PDFs as a binary-response summary.
 
@@ -181,14 +181,14 @@ The Linux archive holds the binary, its icon and desktop entry, and `install-des
 
 You need:
 
-- [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer. Rustman uses edition 2024 and let chains, and some dependencies need 1.88. The latest stable Rust works.
+- [Rust](https://www.rust-lang.org/tools/install) 1.89 or newer. Rustman uses edition 2024 and let chains, and uses Rust’s file locking API. The latest stable Rust works.
 - A C compiler and CMake for dependencies built from source, including bundled SQLite and AWS-LC.
 - On Linux, the system libraries listed below.
 
 The scripting engine and the editor fork come from `rust-man-org` repos on GitHub. Cargo fetches them, so there is nothing extra to clone.
 
 ```sh
-git clone https://github.com/rust-man-org/rustman
+git clone https://github.com/quanghd96/rustman
 cd rustman
 cargo build --release
 ```
@@ -235,8 +235,8 @@ cargo test --workspace
 ## Documentation
 
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): building, the workspace crates, the app's architecture, persistence and testing.
-- [rust-man-org.github.io/rustman/scripting.html](https://rust-man-org.github.io/rustman/scripting.html): the scripting reference, with worked examples and an LLM prompt you can copy.
-- [rust-man-org.github.io/rustman/#roadmap](https://rust-man-org.github.io/rustman/#roadmap): what I am building next.
+- [Scripting reference](docs/scripting.html): the scripting reference, with worked examples and an LLM prompt you can copy.
+- [Roadmap](docs/index.html#roadmap): what I am building next.
 
 ## Thanks
 

@@ -6,13 +6,13 @@ Where something is stubbed or half wired, I say so.
 
 ## Toolchain
 
-You need Rust 1.88 or newer: the code is edition 2024 and uses let chains, and several dependencies (wgpu, image, zip, time) need 1.88. The latest stable Rust works. Two dependencies come from `rust-man-org` repos on GitHub (the engine and the editor fork) and cargo fetches them. You also need a C compiler and CMake, for dependencies built from source, including bundled SQLite and AWS-LC. On Linux add the X, xkb and dbus dev packages: `libxkbcommon-dev libxkbcommon-x11-dev libxi-dev libx11-dev libxcb1-dev libxcb-xkb-dev libdbus-1-dev pkg-config cmake build-essential`.
+You need Rust 1.89 or newer: the code uses Rust 2024 and the file locking API. The latest stable Rust works. Two dependencies come from `rust-man-org` repos on GitHub (the engine and the editor fork) and cargo fetches them. You also need a C compiler and CMake, for dependencies built from source, including bundled SQLite and AWS-LC. On Linux add the X, xkb and dbus dev packages: `libxkbcommon-dev libxkbcommon-x11-dev libxi-dev libx11-dev libxcb1-dev libxcb-xkb-dev libdbus-1-dev pkg-config cmake build-essential`.
 
 - `cargo build --release` builds the app at `target/release/rustman`. A plain `cargo build` in the root builds only the app package.
 - `cargo build --release -p rustman-cli` builds the command line runner at `target/release/rustman-cli`.
 - `cargo run` for day to day work.
 
-For distro packaging, build with `--no-default-features`. That compiles out the in-app updater (the launch check, the Updates card in Settings → About, the update banner, and the binary-swapping code), so the package manager is the only thing that delivers updates.
+For distro packaging, build with `--no-default-features`. That compiles out the in-app updater (the launch check, the Updates card in Settings → About, the update banner, and the release installer), so the package manager is the only thing that delivers updates.
 
 ## Workspace layout
 
@@ -79,9 +79,15 @@ There are two storage layers and they are not equals.
    - A successful local collection write queues sync. Startup, window focus and a 15-second timer also check the remote. The app tracks the last common snapshot's hash and ETag in SQLite with its local connection settings. If both sides changed, the user chooses a workspace. Conditional writes reject races, and a guarded SQLite transaction installs downloaded snapshots.
    - The object contains collections, folders and saved requests. Known credentials and attachment bytes are stripped using the native export policy and retained locally on matching requests. URL values and text bodies can contain secrets and are included. Cloud credentials, environments, global scripts, history and drafts stay local.
 
+## Releasing
+
+To publish, push a tag like `v0.4.1` or run **Release** manually with a version like `0.4.1`. Use the default branch for manual releases. The workflow builds the selected commit for all platforms, hashes the six release files, uploads them to a draft and publishes the draft. The macOS tarball includes the signed app bundle for updating a DMG install and a standalone binary.
+
+The updater and the About page use the GitHub repository from Cargo workspace metadata. A private repository requires `RUSTMAN_GITHUB_TOKEN` in the app's environment with read access to repository contents. The token is used for metadata and GitHub asset API requests, and storage redirects use a separate client.
+
 ## Testing
 
-Run `cargo test --workspace --all-targets`, and again with `--no-default-features`; CI runs both.
+Run `cargo test --workspace --all-targets` locally, and run it again with `--no-default-features`.
 
 ### Golden format tests
 
@@ -105,12 +111,9 @@ Never bless to make a refactor pass.
 
 The other integration suites are `rustman-store/tests/` (storage, workspace, data directory) and `rustman-cli/tests/cli.rs`.
 
-### CI and lints
+### Lints
 
-`.github/workflows/ci-iced.yml` builds the release app on Linux x86_64 and aarch64, checks the `--no-default-features` build, runs the tests in both feature sets, and lints. The lint policy:
-
-- Every crate in `crates/` must pass `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`, with the curated pedantic set in the root `[workspace.lints]` and `clippy.toml`. `unsafe_code` is forbidden and `unreachable_pub` warns.
-- The app package doesn't opt into `[workspace.lints]` yet. Workspace-wide fmt and clippy run in CI as information only (`continue-on-error`) until it does.
+The library crates use the lints in `[workspace.lints]` and `clippy.toml`. Run `cargo fmt --check -p <crate>` and `cargo clippy -p <crate> --all-targets -- -D warnings` locally.
 
 ## Decisions worth remembering
 
@@ -188,13 +191,13 @@ The order is load bearing. A template like `{{API_BACKEND}}/graphql` has no lite
 | Pre-request and test scripts | works | `rustman_core::script::prepare` and `run_tests` run the global script, then the request's own, through the `rustman-script` `Engine`, and apply the effects (`SetHeader`, `SetBody`, `SetEnv`, `Test`, `Log`). Variables are expanded after the pre-request scripts. Results and the Console show in the Tests tab. |
 | Scripting built-ins | works | `env`, `set_env`, `header`, `headers`, `set_header`, `cookie`, `body`, `set_body`, `url`, `test`, `print`, `contains`, base64, `jwt_decode`, `json_parse`, `json_stringify`, and AES-256-GCM. Structural `==`, nesting capped at 256, strings at 16 MiB. No loops, no user-defined functions, no regex. |
 | Command line runner | works | `rustman-cli run`; see the crate table. Not in the release archives yet. |
-| Self update | works | Checks GitHub releases, verifies the archive against `SHA256SUMS`, refuses a version that isn't newer, swaps the binary with `self_replace`, then offers a restart. |
+| Self update | works | Checks GitHub releases, verifies the archive against `SHA256SUMS`, refuses a version that isn't newer, installs the complete app bundle on macOS or replaces the standalone binary, then offers a restart. |
 | Content-Type suggestions | works | A header row named `Content-Type` offers a list of 29 common values. |
 | Duplicate a request | works | "Duplicate" in a request's sidebar menu saves a copy into the same collection as `<name> copy` (numbered when taken), opens it, and starts a rename. `SavedRequest::duplicate_in` copies every field but the id. |
 
 ## Roadmap
 
-Roughly in order of how much it matters to users. The user-facing version, with the bigger features, is the [roadmap section on the site](https://rust-man-org.github.io/rustman/#roadmap). This list is the implementation view plus internal work.
+Roughly in order of how much it matters to users. The user-facing version, with the bigger features, is the [roadmap section on the site](index.html#roadmap). This list is the implementation view plus internal work.
 
 ### 1. Flows
 
@@ -220,4 +223,4 @@ The additions scripts keep needing: loops and list helpers (there is no way to w
 
 ### Hygiene
 
-Put the app package on `[workspace.lints]` so CI's fmt and clippy can enforce it like the library crates, and defer the startup work listed under rough edges.
+Apply `[workspace.lints]` to the app package and defer the startup work listed under rough edges.

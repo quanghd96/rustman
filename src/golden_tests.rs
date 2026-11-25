@@ -638,7 +638,7 @@ fn postman_export_golden_imports() {
     assert_eq!(full.body_type, BodyType::GraphQL);
     assert_eq!(full.graphql_variables, "{\n  \"id\": \"42\"\n}");
     let upload = &products.requests[1];
-    assert_eq!(upload.body_type, BodyType::Multipart);
+    assert_eq!(upload.body_type, BodyType::FormData);
     let fields: Vec<(&str, &FormFieldType)> = upload
         .form_data_fields
         .iter()

@@ -11,13 +11,12 @@ use crate::ui::theme::{
 };
 
 const LOGO: &[u8] = include_bytes!("../../../public/rustman-logo.svg");
-const REPOSITORY: &str = "https://github.com/rust-man-org/rustman";
-const ISSUES: &str = "https://github.com/rust-man-org/rustman/issues";
+const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
 pub fn view<'a>(state: &'a AppState, t: &'static Tokens) -> Element<'a, Message> {
-    let link = |label: &'static str, url: &'static str| {
+    let link = |label: &'static str, url: String| {
         button_on(t, Surface::Raised, label, Variant::Secondary, Size::Regular)
-            .on_press(Message::App(AppMsg::OpenUrl(url.to_owned())))
+            .on_press(Message::App(AppMsg::OpenUrl(url)))
     };
     let mut page = column![
         row![
@@ -32,7 +31,7 @@ pub fn view<'a>(state: &'a AppState, t: &'static Tokens) -> Element<'a, Message>
         ]
         .spacing(SPACE_LG)
         .align_y(Alignment::Center),
-        row![link("Source on GitHub", REPOSITORY), link("Report a bug", ISSUES)].spacing(SPACE_MD),
+        row![link("Source on GitHub", REPOSITORY.to_owned()), link("Report a bug", format!("{REPOSITORY}/issues"))].spacing(SPACE_MD),
         iced::widget::button(text("Built in Rust with iced").size(TEXT_SM).color(t.text_subtle))
             .on_press(Message::Settings(SettingsMsg::CreatorTapped))
             .padding(0)
@@ -55,7 +54,7 @@ fn updates<'a>(state: &'a AppState, t: &'static Tokens) -> Element<'a, Message> 
     use crate::message::UpdateMsg;
     let busy = matches!(state.update, UpdateState::Checking | UpdateState::Installing);
     let status = match &state.update {
-        UpdateState::Idle => "Not checked yet",
+        UpdateState::Idle => state.chrome.update_check_error.as_deref().unwrap_or("Not checked yet"),
         UpdateState::Checking => "Checking…",
         UpdateState::Available(_) => "An update is available",
         UpdateState::Installing => "Downloading the update…",

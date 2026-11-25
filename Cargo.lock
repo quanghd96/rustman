@@ -4902,10 +4902,13 @@ version = "0.4.0"
 dependencies = [
  "flate2",
  "reqwest",
+ "rustix 1.1.4",
  "self-replace",
+ "semver",
  "serde",
  "sha2 0.11.0",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "zip",

@@ -29,9 +29,9 @@ pub struct UpdateInfo {
 #[derive(Debug, Clone)]
 struct Asset {
     name: String,
-    url: String,
-    /// The release's `SHA256SUMS`, when it has one.
-    checksums: Option<String>,
+    id: u64,
+    /// The asset ID of the release's `SHA256SUMS`.
+    checksums: u64,
 }
 
 /// The latest release, when it is newer than `current` (the running build's
