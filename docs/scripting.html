@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scripting · Rustman docs</title>
+  <meta name="description" content="Rustman's pre-request and test scripting language: a small, Rust-native interpreter, not JavaScript." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #08080f;
+      --bg1:    #0c0c18;
+      --bg2:    #10101e;
+      --bg3:    #161628;
+      --border: #1e1e36;
+      --bord2:  #252540;
+      --text:   #e8e8f2;
+      --dim:    #9090b0;
+      --muted:  #52527a;
+      --accent: #f97316;
+      --adim:   rgba(249,115,22,0.10);
+      --alow:   rgba(249,115,22,0.05);
+      --green:  #34d399;
+      --blue:   #60a5fa;
+      --purple: #a78bfa;
+      --red:    #f87171;
+      --r:  12px;
+      --rs: 8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── NAV (matches the landing page) ── */
+    nav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 0.25rem;
+      padding: 0 2rem; height: 52px;
+      background: rgba(8,8,15,0.8);
+      backdrop-filter: blur(16px) saturate(160%);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-weight: 800; font-size: 0.88rem;
+      letter-spacing: 0.08em; color: var(--text);
+      margin-right: 0.75rem;
+    }
+    .logo-mark {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .logo-mark img { width: 24px; height: 24px; display: block; }
+    .nav-sp { flex: 1; }
+    .nav-a {
+      padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 500;
+      color: var(--dim); border-radius: var(--rs);
+      transition: color .15s, background .15s;
+    }
+    .nav-a:hover { color: var(--text); background: var(--bg3); text-decoration: none; }
+    .nav-a.active { color: var(--accent); }
+    .nav-gh {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.35rem 0.9rem; font-size: 0.82rem; font-weight: 600;
+      color: var(--dim); border: 1px solid var(--bord2);
+      border-radius: var(--rs); transition: all .15s;
+    }
+    .nav-gh:hover { color: var(--text); border-color: var(--dim); background: var(--bg3); text-decoration: none; }
+    .nav-links { display: flex; align-items: center; gap: 0.1rem; }
+
+    @media (max-width: 680px) {
+      nav { padding: 0 1rem; gap: 0.2rem; }
+      .nav-links { display: none; }
+    }
+
+    /* ── DOCS LAYOUT ── */
+    .docs-shell {
+      display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 3rem;
+      max-width: 1080px; margin: 0 auto; padding: 3rem 2rem 6rem;
+    }
+    @media (max-width: 860px) {
+      .docs-shell { grid-template-columns: 1fr; padding: 2rem 1.25rem 4rem; }
+      .toc { display: none; }
+    }
+
+    .toc {
+      position: sticky; top: 76px; align-self: start;
+      font-size: 0.8rem; max-height: calc(100vh - 100px); overflow-y: auto;
+    }
+    .toc-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem;
+    }
+    .toc a {
+      display: block; padding: 0.3rem 0; color: var(--dim);
+      border-left: 2px solid transparent; padding-left: 0.75rem;
+      margin-left: -0.75rem;
+    }
+    .toc a:hover { color: var(--text); text-decoration: none; }
+
+    .docs-banner {
+      display: block; width: 100%; max-width: 640px; height: auto;
+      border-radius: var(--r); border: 1px solid var(--border);
+      margin-bottom: 1.75rem;
+    }
+    .docs-content h1 {
+      font-size: clamp(1.9rem, 4vw, 2.5rem); font-weight: 900;
+      letter-spacing: -0.03em; margin-bottom: 0.5rem;
+    }
+    .docs-kicker {
+      font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 1rem;
+    }
+    .docs-lede {
+      font-size: 1rem; color: var(--dim); line-height: 1.75; margin-bottom: 2.5rem;
+      max-width: 640px;
+    }
+    .docs-content h2 {
+      font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em;
+      margin: 2.75rem 0 1rem; padding-top: 0.5rem; border-top: 1px solid var(--border);
+    }
+    .docs-content h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+    .docs-content h3 {
+      font-size: 1rem; font-weight: 700; margin: 1.75rem 0 0.6rem; color: var(--text);
+    }
+    .docs-content p {
+      font-size: 0.92rem; color: var(--dim); line-height: 1.75; margin-bottom: 1rem;
+    }
+    .docs-content p code, .docs-content li code, .docs-content td code {
+      font-family: "JetBrains Mono", monospace; font-size: 0.85em;
+      background: var(--bg3); padding: 0.15em 0.4em; border-radius: 4px;
+      color: var(--accent); border: 1px solid var(--bord2);
+    }
+    .docs-content ul { margin: 0 0 1.25rem 1.25rem; }
+    .docs-content li { font-size: 0.9rem; color: var(--dim); line-height: 1.7; margin-bottom: 0.35rem; }
+    .docs-content strong { color: var(--text); }
+
+    .docs-content pre {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 1rem 1.15rem; overflow-x: auto;
+      font-family: "JetBrains Mono", monospace; font-size: 0.82rem;
+      line-height: 1.75; margin-bottom: 1.5rem; color: #c8c8d8;
+    }
+    .kw { color: #c084fc; } .fn { color: #60a5fa; } .st { color: #86efac; }
+    .nm { color: #fb923c; } .cm { color: #5a5a7a; font-style: italic; }
+
+    .docs-table-wrap { overflow-x: auto; margin-bottom: 1.75rem; }
+    table.docs-table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      border: 1px solid var(--bord2); border-radius: var(--rs);
+      overflow: hidden; font-size: 0.82rem; min-width: 520px;
+    }
+    table.docs-table th {
+      background: var(--bg3); text-align: left; padding: 0.6rem 0.85rem;
+      font-size: 0.68rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--bord2);
+    }
+    table.docs-table td {
+      padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--border);
+      color: var(--dim); vertical-align: top;
+    }
+    table.docs-table tr:last-child td { border-bottom: none; }
+    table.docs-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+    .callout {
+      border: 1px solid var(--bord2); border-left: 3px solid var(--accent);
+      background: var(--bg2); border-radius: 0 var(--rs) var(--rs) 0;
+      padding: 0.9rem 1.1rem; margin-bottom: 1.5rem; font-size: 0.87rem;
+      color: var(--dim); line-height: 1.7;
+    }
+    .callout strong { color: var(--text); }
+
+    .prompt-block { position: relative; }
+    .prompt-block pre {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 1.1rem 1.15rem 1.1rem 1.15rem;
+      overflow-x: auto; font-family: "JetBrains Mono", monospace;
+      font-size: 0.78rem; line-height: 1.65; color: #c8c8d8;
+      white-space: pre; margin-bottom: 1.5rem;
+    }
+    .prompt-copy {
+      position: absolute; top: 0.7rem; right: 0.9rem;
+      font-family: "Inter", system-ui, sans-serif; font-size: 0.72rem; font-weight: 600;
+      color: var(--dim); background: var(--bg3); border: 1px solid var(--bord2);
+      border-radius: 6px; padding: 0.3rem 0.7rem; cursor: pointer;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .prompt-copy:hover { color: var(--text); border-color: var(--dim); background: var(--bg1); }
+    .prompt-copy.copied { color: var(--green); border-color: var(--green); }
+
+    footer {
+      border-top: 1px solid var(--border); padding: 1.75rem 2rem;
+      text-align: center; font-size: 0.78rem; color: var(--muted);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--dim); text-decoration: none; }
+  </style>
+  <script defer src="https://analytics.animesh.us/script.js" data-website-id="b1397736-939c-4843-bf24-384fb2289df3"></script>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">
+    <div class="logo-mark"><img src="rustman-logo.svg" alt="Rustman" /></div>
+    RUSTMAN
+  </a>
+  <div class="nav-sp"></div>
+  <div class="nav-links">
+    <a href="index.html#features" class="nav-a">Features</a>
+    <a href="index.html#compare" class="nav-a">Compare</a>
+    <a href="scripting.html" class="nav-a active">Docs</a>
+    <a href="https://discord.gg/vfa8rKYzKG" class="nav-a" target="_blank" rel="noopener">Discord</a>
+  </div>
+  <a href="https://github.com/rust-man-org/rustman" class="nav-gh" target="_blank" rel="noopener">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+    GitHub
+  </a>
+</nav>
+
+<div class="docs-shell">
+  <aside class="toc">
+    <div class="toc-label">On this page</div>
+    <a href="#when">When scripts run</a>
+    <a href="#where">What a script can see</a>
+    <a href="#errors">When a script fails</a>
+    <a href="#syntax">Syntax</a>
+    <a href="#response">The response object</a>
+    <a href="#builtins">Built-in functions</a>
+    <a href="#limits">Limits</a>
+    <a href="#examples">Worked examples</a>
+    <a href="#missing">What's not here</a>
+    <a href="#ai">Prompt for an LLM</a>
+  </aside>
+
+  <main class="docs-content">
+    <img class="docs-banner" src="rustman-scripting.png" alt="Rustman Scripting" />
+    <div class="docs-kicker">Docs · Scripting</div>
+    <h1>Rustman scripting language</h1>
+    <p class="docs-lede">
+      Pre-request and test scripts run on <strong>rustman-engine</strong>, a small interpreted
+      language written in Rust for Rustman. It is not JavaScript: there is no <code>pm.*</code> API,
+      no Node builtins and no <code>require</code>/<code>import</code>. The language is small so an
+      LLM can write a correct script from a plain-English request. This page lists everything it
+      has; anything not listed here does not exist.
+    </p>
+
+    <h2 id="when">When scripts run</h2>
+    <p>
+      Every HTTP request has a pre-request script and a test script in its <strong>Scripts</strong>
+      tab. <strong>Settings → General → Global scripts</strong> holds one more pair that runs for
+      every request. Scripts don't run for WebSocket connections. One send goes like this:
+    </p>
+    <ul>
+      <li>The global pre-request script runs, then the request's own.</li>
+      <li>The request's <code>{{variables}}</code> are filled in, so a value <code>set_env</code> just wrote is the one that is sent.</li>
+      <li>The response arrives. The global test script runs, then the request's own.</li>
+    </ul>
+    <p>
+      A blank script is skipped. The request's own script sees what the global one did: environment
+      changes through <code>env()</code>, and the headers and body it set through
+      <code>header()</code>, <code>headers()</code> and <code>body()</code>. Test results and
+      <code>print</code> output from both land in the response's <strong>Tests</strong> tab, in
+      order; the output goes to its <strong>Console</strong>.
+    </p>
+    <p>
+      Test scripts also run when no response came back, after a timeout or a refused connection.
+      <code>response.status</code> is then <code>0</code> and the body is empty.
+    </p>
+    <p>
+      If you sync collections with Git, the global scripts are committed with them. Read secrets
+      with <code>env()</code> rather than typing them into a global script.
+    </p>
+    <p>
+      <code>rustman-cli run</code> runs the same scripts, plus the app's global scripts when the
+      collection is one saved in the app. What one request's scripts write with
+      <code>set_env</code>, the next request reads; the CLI doesn't save it. <code>--no-scripts</code>
+      turns scripts off.
+    </p>
+
+    <h2 id="where">What a script can see</h2>
+    <div class="docs-table-wrap">
+      <table class="docs-table">
+        <tr><th></th><th>Pre-request script</th><th>Test script</th></tr>
+        <tr><td>env(name)</td><td colspan="2">The active environment, including changes from scripts that already ran</td></tr>
+        <tr><td>header(name), headers()</td><td>The request's enabled header rows, plus headers the global script set. Not the Auth tab's header.</td><td>The <strong>response's</strong> headers</td></tr>
+        <tr><td>cookie(name)</td><td colspan="2">The Cookie string in the request's Auth tab</td></tr>
+        <tr><td>body()</td><td>The body as written, or as the global script set it</td><td>The body that was sent, including <code>set_body</code> changes</td></tr>
+        <tr><td>url()</td><td colspan="2">The URL as typed in the URL bar</td></tr>
+        <tr><td>response</td><td><code>null</code></td><td>Status and body</td></tr>
+        <tr><td>Effects</td><td><code>set_header</code>, <code>set_body</code>, <code>set_env</code>, <code>print</code></td><td><code>test</code>, <code>set_env</code>, <code>print</code></td></tr>
+      </table>
+    </div>
+    <p>
+      <code>body()</code> and <code>url()</code> return the text as written, so a
+      <code>{{variable}}</code> in them is not filled in. For a GraphQL body, <code>body()</code>
+      and <code>set_body</code> work on the query.
+    </p>
+    <p>
+      <code>set_header</code> and <code>set_body</code> change only the request being sent, never
+      what is saved in the editor, and they do nothing in a test script. <code>set_body</code>
+      works on JSON, Text and GraphQL bodies. A header the Auth tab sends (<code>Authorization</code>,
+      <code>Cookie</code> or the API key header) replaces any header with the same name.
+    </p>
+    <p>
+      The <code>Content-Type</code> follows the body type unless a header row or
+      <code>set_header</code> sets one: JSON and GraphQL bodies go out as
+      <code>application/json</code>, text bodies as <code>text/plain</code>.
+    </p>
+    <p>
+      <code>set_env</code> writes to the environment that was active when you pressed Send and saves
+      it, the same as editing it by hand. In a pre-request script the change applies to the request
+      it runs for: a <code>{{token}}</code> set there is the one that is sent. With no active
+      environment, <code>set_env</code> does nothing.
+    </p>
+
+    <h2 id="errors">When a script fails</h2>
+    <p>
+      A script stops at its first error: a syntax error, or a runtime error such as an unknown
+      function or comparing a string with <code>&lt;</code>. None of that script's effects apply,
+      and the scripts after it in the same phase don't run. Effects of a script that already
+      finished stay: a global script's <code>set_env</code> is kept even when the request's own
+      script then fails.
+    </p>
+    <ul>
+      <li>A failing <strong>pre-request</strong> script stops the send. The error shows in place of the response.</li>
+      <li>A failing <strong>test</strong> script leaves the response in place and shows the error in the Tests tab.</li>
+    </ul>
+    <p>
+      The error names the script, as in <code>Global pre-request script error: …</code>. Syntax
+      errors carry a line number; runtime errors don't.
+    </p>
+
+    <h2 id="syntax">Syntax</h2>
+
+    <h3>Statements</h3>
+    <pre><span class="kw">let</span> name = &lt;expr&gt;
+<span class="kw">if</span> &lt;expr&gt; { &lt;statements&gt; }
+<span class="kw">if</span> &lt;expr&gt; { &lt;statements&gt; } <span class="kw">else</span> { &lt;statements&gt; }
+&lt;expr&gt;</pre>
+    <p>
+      A trailing <code>;</code> is optional. There is no <code>else if</code>: put another
+      <code>if</code> inside the <code>else { }</code> block. There are no loops and no
+      user-defined functions.
+    </p>
+
+    <h3>Comments and literals</h3>
+    <ul>
+      <li><code>// rest of line</code>. No block comments.</li>
+      <li>Numbers: <code>42</code>, <code>3.14</code>, all floating point. There is no unary minus, so
+        <code>-5</code> is a syntax error; write <code>0 - 5</code>.</li>
+      <li>Strings: <code>"double-quoted"</code>, with the escapes <code>\n</code> <code>\t</code>
+        <code>\"</code> <code>\\</code>. Any other escape is an error. A string may span lines.</li>
+      <li><code>true</code>, <code>false</code> and <code>null</code>.</li>
+    </ul>
+
+    <h3>Variables</h3>
+    <p>
+      <code>let x = &lt;expr&gt;</code> binds <code>x</code> for the rest of the script, and another
+      <code>let x</code> replaces it. There is no assignment without <code>let</code>. Scope is
+      flat: a name bound inside an <code>if</code> block is still bound after it. A name that was
+      never bound reads as <code>null</code>, not an error, so a misspelled name gives
+      <code>null</code>.
+    </p>
+
+    <h3>Operators, highest to lowest precedence</h3>
+    <div class="docs-table-wrap">
+      <table class="docs-table">
+        <tr><th>#</th><th>Operators</th><th>Notes</th></tr>
+        <tr><td>1</td><td><code>.field</code> / <code>.method()</code> / <code>fn(args)</code></td><td>Field access and calls</td></tr>
+        <tr><td>2</td><td><code>!</code></td><td>Logical not (prefix)</td></tr>
+        <tr><td>3</td><td><code>+</code> <code>-</code></td><td>Numbers add and subtract. <code>+</code> with a non-number joins text; <code>-</code> with one is an error.</td></tr>
+        <tr><td>4</td><td><code>&lt; &gt; &lt;= &gt;=</code></td><td>Numbers only; anything else is a runtime error</td></tr>
+        <tr><td>5</td><td><code>== !=</code></td><td>Different types are never equal. Lists are equal when their elements are, in order; objects when their fields are, in any order.</td></tr>
+        <tr><td>6</td><td><code>&amp;&amp;</code></td><td>Logical and, short-circuits, gives <code>true</code> or <code>false</code></td></tr>
+        <tr><td>7</td><td><code>||</code></td><td>Logical or, short-circuits, gives <code>true</code> or <code>false</code></td></tr>
+      </table>
+    </div>
+    <p>Parentheses group as usual. There is no <code>*</code>, <code>/</code> or <code>%</code>.</p>
+
+    <h3>Joining text</h3>
+    <p>
+      <code>+</code> on two numbers adds them. Otherwise both sides are turned into text and joined,
+      so <code>"Bearer " + token</code> and <code>"count: " + 3</code> both work. A list or object
+      becomes a readable form such as <code>{id: 7}</code>, not JSON; use
+      <code>json_stringify</code> when you need JSON.
+    </p>
+
+    <h3>Field access</h3>
+    <p>
+      <code>value.field</code> reads a field of an object from <code>json_parse(...)</code>,
+      <code>jwt_decode(...)</code>, <code>headers()</code> or <code>response.json()</code>. A missing
+      field, or a field of something that isn't an object, is <code>null</code>, not an error.
+      <code>env()</code>, <code>header()</code> and <code>cookie()</code> differ on purpose: a
+      missing value is <code>""</code>, so the usual check is <code>!= ""</code>.
+    </p>
+
+    <h2 id="response">The response object (test scripts only)</h2>
+    <ul>
+      <li><code>response.status</code>: the HTTP status code, a number. <code>0</code> when no response came back.</li>
+      <li><code>response.json()</code>: the body parsed as JSON; <code>null</code> if it isn't valid JSON.</li>
+      <li><code>response.text()</code>: the body as a string.</li>
+      <li><code>response.contains("...")</code>: short for <code>contains(response.text(), "...")</code>.</li>
+    </ul>
+    <p>
+      There is no <code>response.headers</code>. In a test script <code>header(name)</code> and
+      <code>headers()</code> read the response's headers. Their names are lowercase, and a header
+      sent more than once, such as <code>Set-Cookie</code>, comes back as one value with a newline
+      between the copies. In a pre-request script <code>response</code> is <code>null</code>.
+    </p>
+
+    <h2 id="builtins">Built-in functions</h2>
+    <p>
+      An argument shown as <code>string</code> must be a string. Anything else, <code>null</code>
+      included, is a runtime error, so check a value with <code>!= null</code> before passing it on.
+    </p>
+    <div class="docs-table-wrap">
+      <table class="docs-table">
+        <tr><th>Function</th><th>Signature</th><th>Notes</th></tr>
+        <tr><td>env(name)</td><td>(string) → string</td><td>A variable of the active environment. <strong>"" if unset</strong>, not null.</td></tr>
+        <tr><td>set_env(name, value)</td><td>(string, any) → null</td><td>Writes a variable to the environment that was active at Send, and saves it. Lists and objects are stored as JSON, anything else as its text form.</td></tr>
+        <tr><td>header(name)</td><td>(string) → string</td><td>Case-insensitive; the first header with that name. Request headers in a pre-request script, response headers in a test script. <strong>"" if absent.</strong></td></tr>
+        <tr><td>headers()</td><td>() → object</td><td>Every header, with the same request/response split as <code>header()</code>.</td></tr>
+        <tr><td>set_header(name, value)</td><td>(string, any) → null</td><td>Sets a header on the outgoing request. Pre-request scripts only. The value converts like <code>set_env</code>, so <code>set_header("X-User-Detail", claims.payload)</code> sends JSON.</td></tr>
+        <tr><td>cookie(name)</td><td>(string) → string</td><td>Case-insensitive lookup in the request's Cookie string. <strong>"" if absent.</strong></td></tr>
+        <tr><td>body()</td><td>() → string</td><td>The request body: as written, or as <code>set_body</code> left it. In a test script, the body that was sent. <code>response.text()</code> is what came back.</td></tr>
+        <tr><td>set_body(value)</td><td>(any) → null</td><td>Replaces the JSON or Text body, or the GraphQL query, for this send. Pre-request scripts only. Converts like <code>set_env</code>.</td></tr>
+        <tr><td>url()</td><td>() → string</td><td>The request URL as typed, <code>{{variables}}</code> not filled in.</td></tr>
+        <tr><td>test(name, condition)</td><td>(string, any) → null</td><td>A pass in the Tests tab when <code>condition</code> is truthy, a fail otherwise.</td></tr>
+        <tr><td>print(value)</td><td>(any) → null</td><td>A line in the Tests tab's Console. Lists and objects print as JSON.</td></tr>
+        <tr><td>base64_encode(s)</td><td>(string) → string</td><td>Standard alphabet, with padding.</td></tr>
+        <tr><td>base64_decode(s)</td><td>(string) → string</td><td>Standard, or URL-safe without padding. <code>null</code> if invalid or not UTF-8.</td></tr>
+        <tr><td>jwt_decode(token)</td><td>(string) → object</td><td>Reads the claims without checking the signature. Accepts a bare token or <code>"Bearer &lt;token&gt;"</code>. Returns <code>{ header, payload }</code>; <code>payload</code> is <code>null</code> when the token is malformed.</td></tr>
+        <tr><td>contains(haystack, needle)</td><td>(any, any) → bool</td><td>Substring test on a string, membership test on a list, key test on an object. <strong>Case-sensitive.</strong> Also written <code>haystack.contains(needle)</code>. A non-string needle is matched by its text, so <code>contains(body(), 404)</code> works. <code>false</code>, never an error, on a null, bool or number haystack.</td></tr>
+        <tr><td>json_parse(s)</td><td>(string) → any</td><td>Parses JSON text. <code>null</code> on invalid JSON.</td></tr>
+        <tr><td>json_stringify(value)</td><td>(any) → string</td><td>Real JSON, with quoted keys and strings: the inverse of <code>json_parse</code>.</td></tr>
+        <tr><td>aes_encrypt(text, key)</td><td>(string, string) → string</td><td>AES-256-GCM, keyed by the SHA-256 hash of <code>key</code>, so any string works. Returns <code>base64(nonce || ciphertext)</code>, with a new random nonce each call.</td></tr>
+        <tr><td>aes_decrypt(text, key)</td><td>(string, string) → string</td><td>Reverses <code>aes_encrypt</code>. <code>null</code> if the key is wrong or the input is malformed.</td></tr>
+      </table>
+    </div>
+    <p>
+      Truthiness, used by <code>if</code>, <code>!</code>, <code>&amp;&amp;</code>,
+      <code>||</code> and <code>test</code>: <code>null</code>, <code>false</code>, <code>0</code>,
+      <code>""</code> and an empty list are falsy. Every other value is truthy, including every
+      object.
+    </p>
+    <div class="callout">
+      <code>aes_encrypt</code> and <code>aes_decrypt</code> round-trip with each other, but the
+      framing (SHA-256 key derivation, <code>nonce || ciphertext</code>) is this engine's own. It is
+      <strong>not guaranteed to match another system's AES-GCM</strong>. If an API dictates its own
+      key derivation or nonce layout, these functions won't fit it as they are.
+    </div>
+
+    <h2 id="limits">Limits</h2>
+    <ul>
+      <li><strong>Nesting: 256 levels.</strong> Blocks, parentheses, call arguments, <code>!</code>
+        and operator chains such as <code>a + b + c</code> all count. Deeper nesting is a syntax error.</li>
+      <li><strong>Strings: 16 MiB.</strong> A script that would build a longer string with
+        <code>+</code>, <code>base64_encode</code>, <code>json_stringify</code> or
+        <code>aes_encrypt</code> stops with a runtime error.</li>
+    </ul>
+    <p>
+      With no loops and no functions, every script ends. Scripts can't read files or make network
+      calls.
+    </p>
+
+    <h2 id="examples">Worked examples</h2>
+
+    <h3>Inject a bearer token, only if one is set</h3>
+    <pre><span class="cm">// pre-request script</span>
+<span class="kw">let</span> token = <span class="fn">env</span>(<span class="st">"access_token"</span>)
+<span class="kw">if</span> token != <span class="st">""</span> {
+    <span class="fn">set_header</span>(<span class="st">"Authorization"</span>, <span class="st">"Bearer "</span> + token)
+}</pre>
+
+    <h3>Set a variable the same request uses</h3>
+    <pre><span class="cm">// pre-request script; the URL is {{base_url}}/users/{{user_id}}</span>
+<span class="kw">let</span> claims = <span class="fn">jwt_decode</span>(<span class="fn">env</span>(<span class="st">"access_token"</span>))
+<span class="fn">set_env</span>(<span class="st">"user_id"</span>, claims.payload.sub)</pre>
+    <p>
+      Variables are filled in after the pre-request scripts, so the URL is sent with the
+      <code>user_id</code> the script just wrote.
+    </p>
+
+    <h3>Save a token from the response</h3>
+    <pre><span class="cm">// test script</span>
+<span class="kw">let</span> token = response.<span class="fn">json</span>().access_token
+<span class="fn">test</span>(<span class="st">"got a token"</span>, token != <span class="kw">null</span>)
+<span class="kw">if</span> token != <span class="kw">null</span> {
+    <span class="fn">set_env</span>(<span class="st">"access_token"</span>, token)
+    <span class="fn">set_env</span>(<span class="st">"user_id"</span>, <span class="fn">jwt_decode</span>(token).payload.sub)
+}</pre>
+
+    <h3>Assert on the JSON response body</h3>
+    <pre><span class="kw">let</span> body = response.<span class="fn">json</span>()
+<span class="fn">test</span>(<span class="st">"id is 7"</span>, body.id == <span class="nm">7</span>)
+<span class="fn">test</span>(<span class="st">"name matches"</span>, body.name == <span class="st">"ferris"</span>)</pre>
+
+    <h3>Compare a whole list or object</h3>
+    <pre><span class="kw">let</span> body = response.<span class="fn">json</span>()
+<span class="fn">test</span>(<span class="st">"tags are a, b"</span>, body.tags == <span class="fn">json_parse</span>(<span class="st">"[\"a\", \"b\"]"</span>))
+<span class="fn">test</span>(<span class="st">"owner matches"</span>, body.owner == <span class="fn">json_parse</span>(<span class="st">"{\"name\": \"ferris\", \"id\": 7}"</span>))</pre>
+    <p>
+      There are no list or object literals, so <code>json_parse</code> builds the expected value.
+      Lists must match in order; object fields may come in any order.
+    </p>
+
+    <h3>Range check with if/else</h3>
+    <pre><span class="kw">let</span> status = response.status
+<span class="kw">if</span> status &gt;= <span class="nm">200</span> &amp;&amp; status &lt; <span class="nm">300</span> {
+    <span class="fn">test</span>(<span class="st">"ok range"</span>, <span class="kw">true</span>)
+} <span class="kw">else</span> {
+    <span class="fn">test</span>(<span class="st">"ok range"</span>, <span class="kw">false</span>)
+}</pre>
+
+    <h3>Assert on a keyword in the response</h3>
+    <p>
+      When the body isn't JSON, test the text. The last two lines are the same test written two ways:
+    </p>
+    <pre><span class="fn">test</span>(<span class="st">"no stack trace leaked"</span>, !<span class="fn">contains</span>(response.<span class="fn">text</span>(), <span class="st">"panicked at"</span>))
+<span class="fn">test</span>(<span class="st">"says expired"</span>, response.<span class="fn">text</span>().<span class="fn">contains</span>(<span class="st">"expired"</span>))
+<span class="fn">test</span>(<span class="st">"says expired"</span>, response.<span class="fn">contains</span>(<span class="st">"expired"</span>))</pre>
+    <p>
+      Matching is case-sensitive, so <code>"Expired"</code> does not match <code>"expired"</code>.
+      The language can't change a string's case, so when the server's capitalization varies, pick a
+      substring that doesn't, like <code>"xpired"</code>.
+    </p>
+
+    <h3>Branch on a header, then check a role is in a list</h3>
+    <pre><span class="kw">if</span> <span class="fn">contains</span>(<span class="fn">header</span>(<span class="st">"Content-Type"</span>), <span class="st">"json"</span>) {
+    <span class="kw">let</span> body = response.<span class="fn">json</span>()
+    <span class="fn">test</span>(<span class="st">"user is an admin"</span>, <span class="fn">contains</span>(body.roles, <span class="st">"admin"</span>))
+    <span class="fn">test</span>(<span class="st">"payload carries a roles key"</span>, <span class="fn">contains</span>(body, <span class="st">"roles"</span>))
+} <span class="kw">else</span> {
+    <span class="fn">test</span>(<span class="st">"json response"</span>, <span class="kw">false</span>)
+}</pre>
+    <p>
+      On a list <code>contains</code> tests membership, and on an object it tests whether a key is
+      present.
+    </p>
+
+    <h3>Check the server set a cookie</h3>
+    <pre><span class="fn">test</span>(<span class="st">"has a session cookie"</span>, <span class="fn">contains</span>(<span class="fn">header</span>(<span class="st">"Set-Cookie"</span>), <span class="st">"session_id="</span>))</pre>
+    <p>
+      <code>cookie()</code> reads the request's own Cookie string, so it can't see what the server
+      set. The response's <code>Set-Cookie</code> header can.
+    </p>
+
+    <h3>Forward a JWT cookie's claims as a header</h3>
+    <p>
+      A session JWT lives in a cookie, and the backend wants the decoded user details in one header.
+    </p>
+    <pre><span class="cm">// pre-request script</span>
+<span class="kw">let</span> claims = <span class="fn">jwt_decode</span>(<span class="fn">cookie</span>(<span class="st">"accessToken"</span>))
+<span class="fn">set_header</span>(<span class="st">"X-User-Detail"</span>, claims.payload)</pre>
+    <p>
+      <code>set_header</code> turns the object into JSON, the same as
+      <code>json_stringify(claims.payload)</code>. To send one field, pass that field:
+      <code>set_header("X-User-Id", claims.payload.sub)</code>.
+    </p>
+
+    <h3>Print what a request sent, from its test script</h3>
+    <pre><span class="fn">print</span>(<span class="fn">url</span>())
+<span class="fn">print</span>(<span class="fn">body</span>())
+<span class="fn">print</span>(<span class="fn">headers</span>())   <span class="cm">// in a test script, the response's headers</span></pre>
+
+    <h3>Encrypt the outgoing body, decrypt the response to assert on it</h3>
+    <pre><span class="cm">// pre-request script</span>
+<span class="fn">set_body</span>(<span class="fn">aes_encrypt</span>(<span class="fn">body</span>(), <span class="fn">env</span>(<span class="st">"body_key"</span>)))</pre>
+    <pre><span class="cm">// test script</span>
+<span class="kw">let</span> plaintext = <span class="fn">aes_decrypt</span>(response.<span class="fn">text</span>(), <span class="fn">env</span>(<span class="st">"body_key"</span>))
+<span class="fn">test</span>(<span class="st">"response decrypts"</span>, plaintext != <span class="kw">null</span>)
+<span class="kw">if</span> plaintext != <span class="kw">null</span> {
+    <span class="fn">test</span>(<span class="st">"order id present"</span>, <span class="fn">json_parse</span>(plaintext).order_id != <span class="kw">null</span>)
+}</pre>
+
+    <h2 id="missing">What this language does not have</h2>
+    <p>
+      No loops, no user-defined functions, no <code>else if</code>, no <code>*</code>,
+      <code>/</code> or <code>%</code>, no <code>[ ]</code> indexing, no list or object literals
+      (build a constant one with <code>json_parse</code>), no <code>try</code>/<code>catch</code>
+      (an error ends the script), no string slicing, no case conversion and no regex:
+      <code>contains</code> is the only pattern matching. A task that needs one of these doesn't fit
+      in a script.
+    </p>
+
+    <h2 id="ai">Prompt for an LLM</h2>
+    <p>
+      Copy the block below into an LLM, add your request at the end, and paste the script it writes
+      into the Scripts tab.
+    </p>
+    <div class="prompt-block">
+      <button class="prompt-copy" id="promptCopyBtn" type="button">Copy</button>
+      <pre id="promptText">You write scripts in Rustman's scripting language: a small custom language
+(not JavaScript, no pm.* API). Use only what is listed below. Nothing else
+exists, and invented syntax or functions fail.
+
+STATEMENTS: `let x = &lt;expr&gt;`, `if &lt;expr&gt; { ... }`, `if &lt;expr&gt; { ... } else { ... }`,
+or a bare expression. `;` is optional. No `else if` (nest an `if` inside
+`else { }`), no loops, no user-defined functions, no assignment without `let`.
+
+LITERALS: numbers (no negative literals: write `0 - 5`), "double-quoted
+strings" (\n \t \" \\ escapes), true, false, null. No list or object literals:
+build a constant one with json_parse("[...]").
+
+OPERATORS, low to high precedence: || , &amp;&amp; , == != , &lt; &gt; &lt;= &gt;= (numbers only) ,
++ - (numbers add; + with a non-number joins text) , ! (prefix not) ,
+.field / .method() / call(...). No * / %. No [ ] indexing.
+== compares lists and objects by content. Different types are never equal.
+
+NAMES: a name never bound with `let` is null. A missing field, or a field of a
+non-object, is null.
+
+COMMENTS: `// rest of line`.
+
+BUILT-IN FUNCTIONS:
+  env(name) -&gt; string                    ("" if unset)
+  set_env(name, value)                   (writes the active environment; in a
+                                           pre-request script, {{name}} in the
+                                           same request uses the new value)
+  header(name) -&gt; string                 ("" if absent; case-insensitive; request
+                                           headers pre-request, response headers
+                                           in a test script)
+  headers() -&gt; object                    (every header, same split as header())
+  set_header(name, value)                (pre-request scripts only)
+  cookie(name) -&gt; string                 ("" if absent; the request's Cookie
+                                           string, not the response's Set-Cookie)
+  body() -&gt; string                       (the request body as written; in a test
+                                           script, the body that was sent)
+  set_body(value)                        (pre-request only; replaces a JSON or
+                                           Text body, or the GraphQL query)
+  url() -&gt; string                        (the request URL as typed)
+  test(name, condition)                  (passes when condition is truthy)
+  print(value)                           (debug log, no assertion)
+  base64_encode(s) / base64_decode(s)    (decode gives null if invalid)
+  jwt_decode(token) -&gt; {header, payload}  (no signature check; accepts a bare
+                                           token or "Bearer &lt;token&gt;"; payload is
+                                           null if the token is malformed)
+  contains(haystack, needle) -&gt; bool     (substring in a string, membership in a
+                                           list, key in an object; case-sensitive.
+                                           Also written haystack.contains(needle))
+  json_parse(s) -&gt; value                 (null on invalid JSON)
+  json_stringify(value) -&gt; string
+  aes_encrypt(text, key) / aes_decrypt(text, key)   (AES-256-GCM, key is any
+                                           string, SHA-256 derived,
+                                           base64(nonce||ciphertext); decrypt
+                                           gives null on failure)
+
+RESPONSE (test scripts only; null in a pre-request script):
+  response.status (number; 0 if no response came back), response.json() (null
+  if not JSON), response.text(), response.contains(needle).
+  To check a cookie the server set: contains(header("Set-Cookie"), "name=").
+
+Arguments that are names or text (env, header, cookie, set_env/set_header
+names, base64_*, jwt_decode, json_parse, aes_*) must be strings: null is a
+runtime error, so check with `!= null` first. set_env, set_header, set_body
+and print accept any value: objects and lists become JSON, anything else its
+plain text form.
+
+CONVENTIONS: env()/header()/cookie() return "" for a missing value: check with
+`!= ""`. A missing JSON field is null: check with `!= null`.
+
+LIMITS: nesting at most 256 levels deep; strings at most 16 MiB.
+
+There's a GLOBAL pre-request/test script pair that runs before every
+request's own scripts. Mention it only if the request clearly applies to
+every request.
+
+Output ONLY the script: no explanation, no markdown code fences, no JS
+syntax, no pm.* API.
+
+My request: &lt;describe what you want the script to do&gt;</pre>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <p>
+    Made by <a href="https://animesh.us" target="_blank" rel="noopener">Animesh Chaudhri</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/rust-man-org/rustman" target="_blank" rel="noopener">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/rust-man-org/rustman-engine" target="_blank" rel="noopener">Engine source</a>
+  </p>
+</footer>
+
+<script>
+  const promptCopyBtn = document.getElementById("promptCopyBtn");
+  const promptText = document.getElementById("promptText");
+  if (promptCopyBtn && promptText) {
+    promptCopyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(promptText.textContent).then(() => {
+        promptCopyBtn.textContent = "Copied!";
+        promptCopyBtn.classList.add("copied");
+        setTimeout(() => {
+          promptCopyBtn.textContent = "Copy";
+          promptCopyBtn.classList.remove("copied");
+        }, 1500);
+      });
+    });
+  }
+</script>
+
+</body>
+</html>

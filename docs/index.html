@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rustman, a native API client built in Rust</title>
+  <meta name="description" content="A free, open source, native API client built in Rust with iced. No webview, no cloud, no accounts, no telemetry." />
+  <meta property="og:title" content="Rustman, a native API client built in Rust" />
+  <meta property="og:description" content="Free and open source API client built in Rust with iced. Native, offline first, no sign up." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #08080f;
+      --bg1:    #0c0c18;
+      --bg2:    #10101e;
+      --bg3:    #161628;
+      --border: #1e1e36;
+      --bord2:  #252540;
+      --text:   #e8e8f2;
+      --dim:    #9090b0;
+      --muted:  #52527a;
+      --accent: #f97316;
+      --adim:   rgba(249,115,22,0.10);
+      --alow:   rgba(249,115,22,0.05);
+      --green:  #34d399;
+      --blue:   #60a5fa;
+      --purple: #a78bfa;
+      --red:    #f87171;
+      --yellow: #fbbf24;
+      --r:  12px;
+      --rs: 8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 0.25rem;
+      padding: 0 2rem; height: 52px;
+      background: rgba(8,8,15,0.8);
+      backdrop-filter: blur(16px) saturate(160%);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-weight: 800; font-size: 0.88rem;
+      letter-spacing: 0.08em; color: var(--text);
+      margin-right: 0.75rem;
+    }
+    .logo-mark {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .logo-mark img { width: 24px; height: 24px; display: block; }
+    .logo-ver {
+      font-size: 0.65rem; font-weight: 500;
+      color: var(--muted); letter-spacing: 0.02em;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.1rem 0.4rem; margin-left: 0.25rem;
+    }
+
+    .nav-sp { flex: 1; }
+
+    .nav-a {
+      padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 500;
+      color: var(--dim); border-radius: var(--rs);
+      transition: color .15s, background .15s;
+    }
+    .nav-a:hover { color: var(--text); background: var(--bg3); text-decoration: none; }
+
+    .nav-gh {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.35rem 0.9rem; font-size: 0.82rem; font-weight: 600;
+      color: var(--dim); border: 1px solid var(--bord2);
+      border-radius: var(--rs); transition: all .15s;
+    }
+    .nav-gh:hover { color: var(--text); border-color: var(--dim); background: var(--bg3); text-decoration: none; }
+
+    .nav-dl {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.375rem 1rem; font-size: 0.82rem; font-weight: 700;
+      color: #fff; background: var(--accent); border-radius: var(--rs);
+      transition: background .15s, box-shadow .15s;
+      box-shadow: 0 0 16px rgba(249,115,22,0.25);
+    }
+    .nav-dl:hover { background: #ea6c10; text-decoration: none; box-shadow: 0 0 24px rgba(249,115,22,0.38); }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 860px; margin: 0 auto;
+      padding: 6rem 2rem 4.5rem;
+    }
+
+    .hero-kicker {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-size: 0.78rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 1.75rem;
+    }
+    .hero-kicker span { color: var(--accent); }
+
+    .hero h1 {
+      font-size: clamp(2.75rem, 7vw, 4.5rem);
+      font-weight: 900; letter-spacing: -0.04em;
+      line-height: 1.06; color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 em { font-style: italic; color: var(--dim); font-weight: 400; }
+
+    .hero p {
+      font-size: 1.05rem; color: var(--dim);
+      max-width: 500px; line-height: 1.75;
+      margin-bottom: 2.25rem;
+    }
+
+    .hero-cta {
+      display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    }
+
+    .btn-dl {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.75rem; font-size: 0.95rem; font-weight: 700;
+      color: #fff; background: var(--accent); border-radius: var(--rs);
+      box-shadow: 0 4px 24px rgba(249,115,22,0.28);
+      transition: all .2s;
+    }
+    .btn-dl:hover { background: #ea6c10; transform: translateY(-1px); text-decoration: none;
+      box-shadow: 0 8px 32px rgba(249,115,22,0.38); }
+
+    .btn-gh {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.4rem; font-size: 0.95rem; font-weight: 600;
+      color: var(--dim); border: 1px solid var(--bord2);
+      border-radius: var(--rs); transition: all .2s;
+    }
+    .btn-gh:hover { color: var(--text); border-color: var(--dim); background: var(--bg3); text-decoration: none; }
+
+    /* ── APP FRAME: a mock of the app in its Violet theme ── */
+    .frame-section {
+      max-width: 1140px; margin: 0 auto;
+      padding: 0 2rem 7rem; position: relative;
+    }
+
+    .frame-halo {
+      position: absolute; bottom: 5rem; left: 50%; transform: translateX(-50%);
+      width: 70%; height: 160px;
+      background: radial-gradient(ellipse, rgba(138,122,255,0.12) 0%, transparent 70%);
+      filter: blur(16px); pointer-events: none;
+    }
+
+    .app-frame {
+      --af-canvas: #151722; --af-surface: #1d202e;
+      --af-border: #25283a; --af-border-strong: #3e435a;
+      --af-text: #f3f4fb; --af-muted: #9ba2b8; --af-subtle: #686f88;
+      --af-accent: #8a7aff; --af-accent-soft: #1e1b3d; --af-accent-fill: #6e62cc;
+      --af-get: #22c57a; --af-post: #fc941c; --af-put: #818cf8; --af-delete: #f87171;
+      --af-success: #22c57a;
+      --af-str: #a5d6a7; --af-num: #f5a97f; --af-lit: #7dc4e4;
+      border-radius: 14px;
+      border: 1px solid var(--af-border-strong);
+      overflow: hidden;
+      background: var(--af-canvas); color: var(--af-text);
+      font-size: 12px; line-height: 18px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset,
+                  0 60px 120px rgba(0,0,0,0.75);
+    }
+    .app-frame svg {
+      width: 14px; height: 14px; flex-shrink: 0;
+      fill: none; stroke: currentColor; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .af-ib {
+      width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--af-muted);
+    }
+    .af-m { font-family: "JetBrains Mono", monospace; font-size: 10.5px; flex-shrink: 0; }
+    .af-get { color: var(--af-get); } .af-post { color: var(--af-post); }
+    .af-put { color: var(--af-put); } .af-del { color: var(--af-delete); }
+
+    /* Title bar: window controls, the command search, layout buttons */
+    .af-title {
+      height: 36px; display: grid; grid-template-columns: 1fr minmax(180px, 280px) 1fr;
+      align-items: center; padding: 0 8px 0 12px; border-bottom: 1px solid var(--af-border);
+    }
+    .af-brand { display: flex; align-items: center; gap: 0.75rem; font-weight: 500; }
+    .af-lights { display: flex; gap: 6px; }
+    .tl { width: 11px; height: 11px; border-radius: 50%; }
+    .tl-r { background: #ff5f57; } .tl-y { background: #febc2e; } .tl-g { background: #28c840; }
+    .af-search {
+      height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 3px 0 8px;
+      background: var(--af-surface); border: 1px solid var(--af-border); border-radius: 6px;
+      color: var(--af-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden;
+    }
+    .af-kbd {
+      margin-left: auto; height: 18px; padding: 0 5px; display: inline-flex; align-items: center;
+      border: 1px solid var(--af-border); border-radius: 4px; background: var(--af-canvas);
+      font-size: 10.5px; color: var(--af-muted);
+    }
+    .af-tright { display: flex; justify-content: flex-end; gap: 4px; }
+
+    .af-body { display: grid; grid-template-columns: 44px 210px minmax(0, 1fr); height: 396px; }
+
+    /* Rail */
+    .af-rail {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 8px 0; border-right: 1px solid var(--af-border);
+    }
+    .af-rail .af-ib { width: 30px; height: 30px; }
+    .af-rail .on { background: var(--af-accent-soft); color: var(--af-accent); }
+    .af-rail .af-sp { flex: 1; }
+
+    /* Sidebar tree: method column, selected row with an accent edge */
+    .af-side { min-width: 0; overflow: hidden; border-right: 1px solid var(--af-border); }
+    .af-side-head {
+      height: 36px; display: flex; align-items: center; padding: 0 8px 0 12px;
+      border-bottom: 1px solid var(--af-border);
+    }
+    .af-side-head b { flex: 1; font-size: 13px; font-weight: 500; }
+    .af-new {
+      height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 10px;
+      background: var(--af-surface); border: 1px solid var(--af-border-strong); border-radius: 6px;
+      font-size: 11.5px;
+    }
+    .af-new svg { width: 12px; height: 12px; color: var(--af-muted); }
+    .af-tree { padding: 4px 0; }
+    .af-row { height: 26px; display: flex; align-items: center; position: relative; white-space: nowrap; }
+    .af-row .af-name { overflow: hidden; text-overflow: ellipsis; }
+    .af-row.col .af-name { font-weight: 500; }
+    .af-row svg { width: 12px; height: 12px; margin-right: 6px; color: var(--af-muted); }
+    .af-row .af-m { width: 40px; }
+    .af-row.sel { background: var(--af-accent-soft); }
+    .af-row.sel::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+      background: var(--af-accent);
+    }
+
+    .af-main { display: flex; flex-direction: column; min-width: 0; }
+
+    /* Open tabs: the active one opens into the page below it */
+    .af-tabs {
+      height: 36px; flex: none; display: flex; align-items: stretch;
+      border-bottom: 1px solid var(--af-border); overflow: hidden;
+    }
+    .af-dtab {
+      display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 170px;
+      padding: 0 8px 0 12px; margin-bottom: -1px; font-size: 11.5px; color: var(--af-muted);
+      border: 1px solid transparent; border-top: 0; white-space: nowrap;
+    }
+    .af-dtab:first-child { border-left: 0; }
+    .af-dtab.on {
+      color: var(--af-text); background: var(--af-canvas);
+      border-color: var(--af-border); border-bottom-color: var(--af-canvas);
+    }
+    .af-dtab .af-t { overflow: hidden; text-overflow: ellipsis; }
+    .af-dtab svg { width: 12px; height: 12px; color: var(--af-muted); }
+    .af-udot { width: 6px; height: 6px; margin: 0 3px; border-radius: 50%; background: var(--af-muted); flex-shrink: 0; }
+    .af-add { align-self: center; margin-left: 4px; }
+
+    /* URL row: one field with the method inside it */
+    .af-urlrow { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+    .af-field {
+      flex: 1; min-width: 0; height: 32px; display: flex; align-items: center;
+      background: var(--af-surface); border: 1px solid var(--af-border); border-radius: 6px;
+    }
+    .af-mdd {
+      width: 76px; height: 100%; flex: none; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 8px 0 10px;
+      border-right: 1px solid var(--af-border); color: var(--af-muted);
+    }
+    .af-mdd .af-m { font-size: 11.5px; }
+    .af-mdd svg { width: 12px; height: 12px; }
+    .af-url {
+      flex: 1; min-width: 0; padding: 0 10px;
+      font-family: "JetBrains Mono", monospace; font-size: 12px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .af-url .af-var { color: var(--af-accent); }
+    .af-send {
+      height: 32px; padding: 0 18px; flex: none; display: inline-flex; align-items: center;
+      border-radius: 6px; background: var(--af-accent-fill); color: #fff;
+      font-size: 12px; font-weight: 500;
+    }
+    .af-env {
+      height: 32px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 10px;
+      border: 1px solid var(--af-border); border-radius: 6px; font-size: 11.5px;
+    }
+    .af-env svg { width: 12px; height: 12px; color: var(--af-muted); }
+    .af-edot { width: 6px; height: 6px; border-radius: 50%; background: var(--af-success); }
+
+    /* Request and response panes, each with an underline-tab bar */
+    .af-panes { flex: 1; display: flex; min-height: 0; }
+    .af-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .af-req { width: 42%; flex: none; border-right: 1px solid var(--af-border); }
+    .af-res { flex: 1; }
+    .af-ptabs {
+      height: 32px; flex: none; display: flex; align-items: stretch; gap: 14px;
+      padding: 0 10px 0 12px; border-bottom: 1px solid var(--af-border);
+      white-space: nowrap; overflow: hidden;
+    }
+    .af-ptab { display: flex; align-items: center; gap: 5px; position: relative; font-size: 11.5px; color: var(--af-muted); }
+    .af-ptab.on { color: var(--af-text); }
+    .af-ptab.on::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+      background: var(--af-accent);
+    }
+    .af-n { font-size: 10.5px; color: var(--af-muted); }
+    .af-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .af-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; color: var(--af-success); }
+    .af-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .af-meta { font-size: 11.5px; color: var(--af-muted); font-variant-numeric: tabular-nums; }
+
+    .af-kv-row {
+      height: 30px; display: grid; grid-template-columns: 30px 38% minmax(0, 1fr);
+      border-bottom: 1px solid var(--af-border);
+      font-family: "JetBrains Mono", monospace; font-size: 11.5px;
+    }
+    .af-kv-row > span {
+      display: flex; align-items: center; min-width: 0; padding: 0 8px;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .af-kv-row .af-v { border-left: 1px solid var(--af-border); }
+    .af-kv-row .af-var { color: var(--af-accent); }
+    .af-kv-row.ph > span { color: var(--af-muted); font-family: "Inter", system-ui, sans-serif; }
+    .af-cb {
+      width: 13px; height: 13px; border-radius: 4px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--af-accent-fill); color: #fff;
+    }
+    .af-cb svg { width: 9px; height: 9px; stroke-width: 3; }
+
+    .af-code {
+      flex: 1; min-height: 0; overflow: hidden; padding: 8px 0;
+      font-family: "JetBrains Mono", monospace; font-size: 11.5px; line-height: 19px; white-space: pre;
+    }
+    .af-ln { display: flex; }
+    .af-ln i { width: 40px; flex: none; padding-right: 14px; text-align: right; font-style: normal; color: var(--af-subtle); }
+    .af-k { color: var(--af-accent); } .af-s { color: var(--af-str); } .af-nu { color: var(--af-num); }
+    .af-l { color: var(--af-lit); } .af-p { color: var(--af-muted); }
+
+    .af-statusbar {
+      height: 26px; display: flex; align-items: center; gap: 14px; padding: 0 12px;
+      border-top: 1px solid var(--af-border); font-size: 11px; color: var(--af-muted);
+    }
+    .af-sb { display: inline-flex; align-items: center; gap: 6px; }
+    .af-sb svg { width: 12px; height: 12px; }
+    .af-statusbar .af-sp { flex: 1; }
+
+    /* Method colors for the feature cards below */
+    .mg { color: #34d399; font-weight: 800; font-size: 0.6rem; }
+    .mp { color: #f97316; font-weight: 800; font-size: 0.6rem; }
+    .md { color: #f87171; font-weight: 800; font-size: 0.6rem; }
+
+    @media (max-width: 1040px) {
+      .af-body { grid-template-columns: 44px minmax(0, 1fr); }
+      .af-side { display: none; }
+    }
+    @media (max-width: 900px) {
+      .af-body { height: auto; }
+      .af-env { display: none; }
+      .af-panes { flex-direction: column; }
+      .af-req { width: auto; border-right: none; border-bottom: 1px solid var(--af-border); }
+      .af-res { height: 240px; flex: none; }
+    }
+
+    @media (max-width: 680px) {
+      .frame-section { padding-left: 0; padding-right: 0; padding-bottom: 4rem; }
+      .app-frame { border-radius: 0; border-left: none; border-right: none; }
+      .af-rail, .af-tright { display: none; }
+      .af-body { grid-template-columns: minmax(0, 1fr); }
+    }
+    /* ── BENTO GRID ── */
+    .bento-section { max-width: 1140px; margin: 0 auto; padding: 0 2rem 7rem; }
+
+    .sec-label {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--accent);
+      display: flex; align-items: center; gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .sec-label::before, .sec-label::after {
+      content: ''; flex: 0 0 18px; height: 1px;
+      background: rgba(249,115,22,0.4);
+    }
+
+    .bento {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: 200px 180px 180px;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      .bento {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: auto;
+      }
+      /* Reset ALL explicit row/column placements — auto-placement takes over */
+      .b-a { grid-column: span 2; grid-row: auto; min-height: 340px; }
+      .b-g { grid-column: span 2; grid-row: auto; }
+      .b-b, .b-c, .b-d, .b-e, .b-f, .b-h { grid-column: span 1; grid-row: auto; }
+    }
+    @media (max-width: 540px) {
+      .bento { grid-template-columns: 1fr; }
+      .b-a  { grid-column: 1; grid-row: auto; min-height: 280px; }
+      .b-b, .b-c, .b-d, .b-e, .b-f, .b-g, .b-h { grid-column: 1; grid-row: auto; }
+    }
+
+    .bcard {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.5rem;
+      overflow: hidden; position: relative;
+      display: flex; flex-direction: column;
+      transition: border-color .2s, background .2s;
+    }
+    .bcard:hover { border-color: var(--bord2); background: var(--bg3); }
+
+    .bcard-label {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;
+    }
+    .bcard-title {
+      font-size: 0.95rem; font-weight: 700; color: var(--text);
+      letter-spacing: -0.01em; margin-bottom: 0.35rem;
+    }
+    .bcard-desc {
+      font-size: 0.78rem; color: var(--dim); line-height: 1.6;
+    }
+    .bcard-desc code {
+      font-family: "JetBrains Mono", monospace; font-size: 0.8em;
+      background: rgba(255,255,255,0.06); padding: 0.1em 0.3em;
+      border-radius: 4px; color: var(--accent);
+    }
+
+    /* Card positions */
+    .b-a { grid-column: 1 / 3; grid-row: 1 / 3; }
+    .b-b { grid-column: 3;     grid-row: 1; }
+    .b-c { grid-column: 4;     grid-row: 1; }
+    .b-d { grid-column: 3;     grid-row: 2; }
+    .b-e { grid-column: 4;     grid-row: 2; }
+    .b-f { grid-column: 1;     grid-row: 3; }
+    .b-g { grid-column: 2 / 4; grid-row: 3; }
+    .b-h { grid-column: 4;     grid-row: 3; }
+
+    /* ─ Card A: HTTP Engine animation ─ */
+    .b-a { padding: 1.5rem 1.5rem 0; }
+    .b-a .bcard-desc { margin-bottom: 1.25rem; }
+
+    .http-demo {
+      flex: 1; border-radius: 8px 8px 0 0;
+      background: var(--bg); border: 1px solid var(--border); border-bottom: none;
+      padding: 0.85rem 1rem; overflow: hidden;
+      font-family: "JetBrains Mono", monospace; font-size: 0.68rem; line-height: 1.8;
+    }
+
+    .hline { opacity: 0; transform: translateX(-6px); }
+    .hline.req { color: var(--dim); }
+    .hline.resp-ok { color: var(--green); font-weight: 600; }
+    .hline.resp-data { color: var(--dim); }
+    .hline .hkey { color: var(--blue); }
+    .hline .hval { color: var(--green); }
+    .hline .hacc { color: var(--accent); }
+    .hline .hms { color: var(--accent); font-weight: 600; }
+    .hsep { border: none; border-top: 1px solid var(--border); margin: 0.4rem 0; opacity: 0; }
+
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* HTTP demo — each line gets its own looping keyframe so the whole thing cycles */
+    @keyframes hl1 { 0%{opacity:0;transform:translateX(-6px)} 5%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl2 { 0%,9%{opacity:0;transform:translateX(-6px)} 14%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl3 { 0%,15%{opacity:0;transform:translateX(-6px)} 20%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl4 { 0%,21%{opacity:0;transform:translateX(-6px)} 26%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl-sep { 0%,27%{opacity:0} 30%{opacity:1} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl6 { 0%,34%{opacity:0;transform:translateX(-6px)} 39%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl7 { 0%,41%{opacity:0;transform:translateX(-6px)} 46%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+    @keyframes hl8 { 0%,48%{opacity:0;transform:translateX(-6px)} 53%{opacity:1;transform:none} 76%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+
+    .hline:nth-child(1) { animation: hl1     7s ease-in-out infinite; }
+    .hline:nth-child(2) { animation: hl2     7s ease-in-out infinite; }
+    .hline:nth-child(3) { animation: hl3     7s ease-in-out infinite; }
+    .hline:nth-child(4) { animation: hl4     7s ease-in-out infinite; }
+    .hsep               { animation: hl-sep  7s ease-in-out infinite; }
+    .hline:nth-child(6) { animation: hl6     7s ease-in-out infinite; }
+    .hline:nth-child(7) { animation: hl7     7s ease-in-out infinite; }
+    .hline:nth-child(8) { animation: hl8     7s ease-in-out infinite; }
+
+    /* ─ Card B: No telemetry ─ */
+    .privacy-icon {
+      margin-top: auto; font-size: 2rem; line-height: 1;
+      filter: grayscale(0.2);
+    }
+    .privacy-stat {
+      margin-top: 0.5rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem; color: var(--muted);
+    }
+
+    /* ─ Card C: Install size ─ */
+    .size-display {
+      margin-top: auto;
+      font-size: 2.4rem; font-weight: 900; letter-spacing: -0.04em;
+      color: var(--accent); line-height: 1;
+    }
+    .size-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+
+    .size-bar { margin-top: 0.75rem; }
+    .size-bar-row {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-family: "JetBrains Mono", monospace; font-size: 0.62rem;
+      color: var(--muted); margin-bottom: 0.25rem;
+    }
+    .size-bar-track {
+      flex: 1; height: 4px; border-radius: 2px;
+      background: var(--bg3); overflow: hidden;
+    }
+    .size-bar-fill {
+      height: 100%; border-radius: 2px;
+      animation: grow-bar 2s 0.5s cubic-bezier(0.4,0,0.2,1) forwards;
+      transform-origin: left; transform: scaleX(0);
+    }
+    @keyframes grow-bar { to { transform: scaleX(1); } }
+    .fill-us  { background: var(--accent);  width: 3%;   }
+    .fill-pm  { background: var(--red);     width: 100%; animation-delay: 0.7s; }
+    .fill-br  { background: var(--yellow);  width: 30%;  animation-delay: 0.9s; }
+
+    /* ─ Card D: Monaco Editor ─ */
+    .editor-mock {
+      margin-top: auto;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.65rem 0.75rem;
+      font-family: "JetBrains Mono", monospace; font-size: 0.68rem;
+      line-height: 1.7; overflow: hidden;
+    }
+    .editor-mock .ek { color: #c084fc; }
+    .editor-mock .es { color: #86efac; }
+    .editor-mock .en { color: #fb923c; }
+    .cursor {
+      display: inline-block; width: 2px; height: 0.85em;
+      background: var(--accent); vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ─ Card E: Test Runner ─ */
+    .test-results {
+      margin-top: auto; display: flex; flex-direction: column; gap: 0.35rem;
+    }
+    .test-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-family: "JetBrains Mono", monospace; font-size: 0.67rem;
+      opacity: 0; transform: translateX(-4px);
+    }
+    .test-row.pass { color: var(--text); }
+    .test-row.fail { color: var(--red); }
+    .test-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .tdot-pass { background: var(--green); }
+    .tdot-fail { background: var(--red); }
+    .test-ms { margin-left: auto; color: var(--muted); font-size: 0.6rem; }
+
+    .test-row:nth-child(1) { animation: slide-in .3s 0.4s forwards; }
+    .test-row:nth-child(2) { animation: slide-in .3s 0.9s forwards; }
+    .test-row:nth-child(3) { animation: slide-in .3s 1.4s forwards; }
+
+    .test-summary {
+      margin-top: 0.6rem; padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.65rem; color: var(--muted);
+      display: flex; gap: 0.75rem;
+      opacity: 0; animation: slide-in .3s 2s forwards;
+    }
+    .ts-pass { color: var(--green); font-weight: 600; }
+    .ts-time { margin-left: auto; }
+
+    /* ─ Card F: Themes ─ */
+    .theme-dots {
+      display: flex; gap: 0.5rem; margin-top: auto; flex-wrap: wrap;
+    }
+    .tdot {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid transparent;
+      transition: transform .2s, border-color .2s;
+      cursor: default;
+    }
+    .tdot:hover { transform: scale(1.15); }
+    .tdot.active { border-color: rgba(255,255,255,0.3); }
+    .td-flame   { background: #f97316; animation: theme-pulse 3s 0s    infinite; }
+    .td-violet  { background: #8b5cf6; animation: theme-pulse 3s 0.5s  infinite; }
+    .td-cobalt  { background: #3b82f6; animation: theme-pulse 3s 1s    infinite; }
+    .td-emerald { background: #10b981; animation: theme-pulse 3s 1.5s  infinite; }
+    .td-rose    { background: #f43f5e; animation: theme-pulse 3s 2s    infinite; }
+    .td-midnight{ background: #6366f1; animation: theme-pulse 3s 2.5s  infinite; }
+
+    @keyframes theme-pulse {
+      0%,80%,100% { transform: scale(1); box-shadow: none; }
+      40% { transform: scale(1.12); box-shadow: 0 0 12px currentColor; }
+    }
+
+    /* ─ Card G: Layout toggle ─ */
+    .layout-demo {
+      flex: 1; margin-top: 0.75rem;
+      display: flex; align-items: center; justify-content: center; gap: 1rem;
+    }
+    .layout-frame {
+      border: 1px solid var(--bord2); border-radius: 6px;
+      overflow: hidden; background: var(--bg);
+      width: 120px; height: 80px;
+      flex-shrink: 0;
+    }
+    .lf-v {
+      display: grid; grid-template-rows: 1fr 1fr; height: 100%;
+    }
+    .lf-h {
+      display: grid; grid-template-columns: 1fr 1fr; height: 100%;
+    }
+    .lf-pane {
+      background: var(--bg2); border: 1px solid var(--border);
+    }
+    .lf-pane:first-child { background: var(--bg3); }
+    .layout-arrow {
+      font-size: 1rem; color: var(--muted);
+      animation: arrow-blink 2s ease-in-out infinite;
+    }
+    @keyframes arrow-blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+    /* ─ Card H: Collections ─ */
+    .coll-mini {
+      margin-top: auto;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden;
+      font-size: 0.65rem; font-family: "JetBrains Mono", monospace;
+    }
+    .cm-row {
+      display: flex; align-items: center; gap: 0.35rem;
+      padding: 0.28rem 0.6rem; border-bottom: 1px solid var(--border);
+      color: var(--muted); opacity: 0;
+    }
+    .cm-row:last-child { border-bottom: none; }
+    .cm-row.cmsel { background: rgba(249,115,22,0.05); color: var(--text); }
+    .cm-row:nth-child(1) { animation: slide-in .25s 0.1s forwards; }
+    .cm-row:nth-child(2) { animation: slide-in .25s 0.3s forwards; }
+    .cm-row:nth-child(3) { animation: slide-in .25s 0.5s forwards; }
+    .cm-row:nth-child(4) { animation: slide-in .25s 0.7s forwards; }
+    .cm-row:nth-child(5) { animation: slide-in .25s 0.9s forwards; }
+
+    /* ── SCRIPTS ── */
+    .scripts-section { max-width: 1140px; margin: 0 auto; padding: 0 2rem 7rem; }
+    .scripts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 700px) { .scripts-grid { grid-template-columns: 1fr; } }
+
+    .script-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r); overflow: hidden;
+      transition: border-color .2s;
+    }
+    .script-card:hover { border-color: var(--bord2); }
+
+    .sc-head {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+    }
+    .scdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .sd-pre  { background: var(--yellow); box-shadow: 0 0 6px rgba(251,191,36,.35); }
+    .sd-test { background: var(--green);  box-shadow: 0 0 6px rgba(52,211,153,.35); }
+    .sc-head span { font-size: 0.73rem; font-weight: 600; color: var(--dim); }
+
+    .script-card pre {
+      padding: 1.1rem 1rem; font-family: "JetBrains Mono", monospace;
+      font-size: 0.73rem; line-height: 1.75; color: #c8c8d8;
+      overflow-x: auto; tab-size: 2;
+    }
+    .pc { color: #5a5a7a; font-style: italic; }
+    .pk { color: #c084fc; }
+    .pf { color: #60a5fa; }
+    .ps { color: #86efac; }
+    .pn { color: #fb923c; }
+
+    /* ── COMPARE ── */
+    .compare-section { max-width: 980px; margin: 0 auto; padding: 0 2rem 7rem; }
+
+    .cmp-table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      border: 1px solid var(--bord2); border-radius: var(--r);
+      overflow: hidden; font-size: 0.83rem;
+      min-width: 560px;
+    }
+    .cmp-table thead tr { background: var(--bg3); }
+    .cmp-table th {
+      padding: 0.9rem 1.1rem; font-size: 0.7rem; font-weight: 700;
+      color: var(--muted); text-align: left;
+      border-bottom: 1px solid var(--bord2);
+      letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .cmp-table th.cu { color: var(--accent); background: var(--alow); }
+    .cmp-table td {
+      padding: 0.75rem 1.1rem; border-bottom: 1px solid var(--border);
+      color: var(--dim); vertical-align: middle;
+    }
+    .cmp-table tr:last-child td { border-bottom: none; }
+    .cmp-table td.fname { color: var(--text); font-weight: 500; font-size: 0.8rem; }
+    .cmp-table td.cu { background: var(--alow); }
+    .cmp-table tbody tr:hover td { background: rgba(255,255,255,0.013); }
+    .cmp-table tbody tr:hover td.cu { background: rgba(249,115,22,0.045); }
+
+    .cv { color: var(--green); font-size: 0.82rem; font-weight: 600; }
+    .cx { color: var(--muted); font-size: 0.82rem; }
+    .cp { color: var(--yellow); font-size: 0.75rem; font-weight: 600; }
+    .table-note { font-size: 0.72rem; color: var(--muted); text-align: center; margin-top: 1rem; }
+
+    /* ── ROADMAP ── */
+    .roadmap-section { max-width: 980px; margin: 0 auto; padding: 0 2rem 7rem; }
+
+    .rm-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; align-items: start;
+    }
+
+    .rm-group {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r); overflow: hidden;
+      transition: border-color .2s;
+    }
+    .rm-group:hover { border-color: var(--bord2); }
+
+    .rm-head {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.65rem 0.95rem;
+      background: var(--bg3); border-bottom: 1px solid var(--border);
+    }
+    .rm-head span { font-size: 0.73rem; font-weight: 600; color: var(--dim); }
+    .rm-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .rd-flow   { background: var(--accent); box-shadow: 0 0 6px rgba(249,115,22,.40); }
+    .rd-proto  { background: var(--blue);   box-shadow: 0 0 6px rgba(96,165,250,.35); }
+    .rd-script { background: var(--purple); box-shadow: 0 0 6px rgba(167,139,250,.35); }
+
+    .rm-item { padding: 0.8rem 0.95rem; border-bottom: 1px solid var(--border); }
+    .rm-item:last-child { border-bottom: none; }
+    .rm-item-top {
+      display: flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap;
+    }
+    .rm-item-t {
+      font-size: 0.85rem; font-weight: 700; color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .rm-item-t a { color: var(--text); }
+    .rm-item-t a:hover { color: var(--accent); text-decoration: none; }
+    .rm-item-t code {
+      font-family: "JetBrains Mono", monospace; font-size: 0.85em;
+      background: rgba(255,255,255,0.06); padding: 0.1em 0.3em;
+      border-radius: 4px; color: var(--accent);
+    }
+    .rm-item-d {
+      font-size: 0.78rem; color: var(--dim);
+      line-height: 1.6; margin-top: 0.3rem;
+    }
+
+    .rm-chip {
+      flex-shrink: 0; padding: 0.12rem 0.45rem; border-radius: 4px;
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase; white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .ch-ship { background: rgba(52,211,153,0.12);  color: var(--green);  border-color: rgba(52,211,153,0.22); }
+    .ch-next { background: var(--adim);             color: var(--accent); border-color: rgba(249,115,22,0.22); }
+    .ch-plan { background: rgba(96,165,250,0.10);  color: var(--blue);   border-color: rgba(96,165,250,0.20); }
+    .ch-exp  { background: rgba(167,139,250,0.10); color: var(--purple); border-color: rgba(167,139,250,0.20); }
+
+    /* Flows carries the section: full width, accent framed */
+    .rm-lead {
+      grid-column: 1 / -1;
+      border-color: rgba(249,115,22,0.28);
+      position: relative;
+    }
+    .rm-lead::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 0%, rgba(249,115,22,0.06) 0%, transparent 65%);
+    }
+    .rm-lead .rm-head { background: var(--adim); border-bottom-color: rgba(249,115,22,0.18); }
+    .rm-lead .rm-head span { color: var(--text); }
+    .rm-lead-items { display: grid; grid-template-columns: 1fr 1fr; position: relative; }
+    .rm-lead-items .rm-item { border-bottom: none; border-right: 1px solid var(--border); }
+    .rm-lead-items .rm-item:last-child { border-right: none; }
+    .rm-lead .rm-item-t { font-size: 0.95rem; }
+    .rm-lead .rm-item-d { font-size: 0.8rem; }
+
+    @media (max-width: 700px) {
+      .rm-grid { grid-template-columns: 1fr; }
+      .rm-lead-items { grid-template-columns: 1fr; }
+      .rm-lead-items .rm-item { border-right: none; border-bottom: 1px solid var(--border); }
+      .rm-lead-items .rm-item:last-child { border-bottom: none; }
+    }
+
+    /* ── DOWNLOAD ── */
+    .dl-section { max-width: 820px; margin: 0 auto; padding: 0 2rem 7rem; }
+
+    .dl-top {
+      border: 1px solid var(--bord2); border-radius: 16px;
+      padding: 2.5rem; text-align: center; margin-bottom: 1rem;
+      background: var(--bg2); position: relative; overflow: hidden;
+    }
+    .dl-top::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(249,115,22,0.07) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .dl-top::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(249,115,22,0.5), transparent);
+    }
+
+    .dl-top h2 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.5rem;
+    }
+    .dl-top p { font-size: 0.9rem; color: var(--dim); margin-bottom: 1.75rem; }
+
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 0.6rem;
+      padding: 0.85rem 2.25rem; font-size: 1rem; font-weight: 700;
+      color: #fff; background: var(--accent); border-radius: var(--rs);
+      box-shadow: 0 4px 28px rgba(249,115,22,0.32);
+      transition: all .2s; margin-bottom: 0.75rem;
+    }
+    .dl-btn:hover { background: #ea6c10; transform: translateY(-1px); text-decoration: none;
+      box-shadow: 0 8px 36px rgba(249,115,22,0.42); }
+    .dl-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+    .dl-ver { font-size: 0.74rem; color: var(--muted); display: block; }
+
+    .dl-plats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem; margin-top: 1.5rem;
+    }
+    @media (max-width: 540px) { .dl-plats { grid-template-columns: 1fr; } }
+
+    .dl-plat {
+      display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+      padding: 1.25rem 0.75rem; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: var(--rs);
+      text-decoration: none; transition: all .2s; cursor: pointer;
+    }
+    .dl-plat:hover { border-color: rgba(249,115,22,0.35); transform: translateY(-2px); text-decoration: none; }
+    .dl-plat-ico { font-size: 1.4rem; }
+    .dl-plat-name { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+    .dl-plat-fmt { font-family: "JetBrains Mono", monospace; font-size: 0.62rem; color: var(--muted); text-align: center; line-height: 1.6; }
+    .dl-plat-cta { font-size: 0.7rem; font-weight: 600; color: var(--accent); }
+
+    .src-block {
+      background: var(--bg2); border: 1px solid var(--bord2);
+      border-radius: var(--r); overflow: hidden;
+    }
+    .src-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.7rem 1.1rem; border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+    }
+    .src-top span {
+      font-size: 0.7rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .src-block pre {
+      padding: 1.1rem; font-family: "JetBrains Mono", monospace;
+      font-size: 0.77rem; line-height: 1.8; color: #c8c8d8; overflow-x: auto;
+    }
+    .pc2 { color: var(--muted); font-style: italic; }
+    .pcmd { color: var(--accent); }
+
+    .req-note {
+      font-size: 0.75rem; color: var(--muted); text-align: center;
+      margin-top: 0.9rem; line-height: 1.7;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 1.75rem 2rem;
+      text-align: center; font-size: 0.78rem; color: var(--muted);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--dim); text-decoration: none; }
+
+    /* ── RESPONSIVE ── */
+    .nav-links { display: flex; align-items: center; gap: 0.1rem; }
+    .cmp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--r); }
+    .script-card pre { overflow-x: auto; }
+
+    /* Mobile feature list — hidden on desktop */
+    .mob-features { display: none; }
+
+    /* Mobile compare stats — hidden on desktop */
+    .mob-compare { display: none; }
+
+    @media (max-width: 680px) {
+      /* NAV */
+      nav { padding: 0 1rem; gap: 0.2rem; }
+      .nav-links { display: none; }
+      .nav-gh { display: none; }
+      .logo-ver { display: none; }
+
+      /* HERO */
+      .hero { padding: 3rem 1.25rem 2.5rem; }
+      .hero p { font-size: 0.92rem; }
+      .hero-cta { flex-direction: column; align-items: stretch; }
+      .btn-dl, .btn-gh { justify-content: center; padding: 0.75rem 1.25rem; }
+
+      /* Hide desktop-heavy sections, show mobile alternates */
+      .frame-section { display: none; }
+      .bento { display: none; }
+      .mob-features { display: flex; flex-direction: column; gap: 0; }
+      .cmp-table { display: none; }
+      .mob-compare { display: grid; }
+
+      /* Section spacing */
+      .bento-section, .scripts-section, .compare-section, .roadmap-section, .dl-section
+        { padding-left: 1.25rem; padding-right: 1.25rem; padding-bottom: 3.5rem; }
+
+      /* Scripts */
+      .scripts-grid { grid-template-columns: 1fr; }
+      .script-card pre { font-size: 0.68rem; }
+
+      /* Download */
+      .dl-top { padding: 1.75rem 1.25rem; }
+      .dl-top h2 { font-size: 1.5rem; }
+      .dl-top p { font-size: 0.85rem; }
+      .dl-plats { grid-template-columns: 1fr; gap: 0.5rem; }
+      .dl-plat { flex-direction: row; justify-content: flex-start; gap: 1rem; padding: 0.9rem 1rem; }
+      .dl-btn { width: 100%; justify-content: center; }
+      .src-block pre { font-size: 0.7rem; }
+      .table-note { display: none; }
+    }
+
+    @media (max-width: 380px) {
+      .hero h1 { font-size: 2rem; }
+      .nav-dl { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
+    }
+
+    /* ── MOBILE FEATURE LIST ── */
+    .mob-feat {
+      display: flex; align-items: flex-start; gap: 1rem;
+      padding: 1.1rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .mob-feat:last-child { border-bottom: none; }
+    .mob-feat-ic {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: var(--adim); border: 1px solid rgba(249,115,22,0.15);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .mob-feat-ic svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .mob-feat-t { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
+    .mob-feat-d { font-size: 0.78rem; color: var(--dim); line-height: 1.55; }
+    .mob-feat-d code { font-family: "JetBrains Mono", monospace; font-size: 0.82em; background: var(--bg3); padding: 0.1em 0.3em; border-radius: 3px; color: var(--accent); }
+
+    /* ── MOBILE COMPARE ── */
+    .mob-compare {
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem; margin-bottom: 1.5rem;
+    }
+    .mob-stat {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 1rem;
+    }
+    .mob-stat-v {
+      font-size: 1.25rem; font-weight: 900; letter-spacing: -0.03em;
+      color: var(--accent); margin-bottom: 0.2rem;
+    }
+    .mob-stat-l { font-size: 0.7rem; color: var(--muted); line-height: 1.4; }
+    .mob-why {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 1.1rem 1.25rem;
+      grid-column: span 2;
+    }
+    .mob-why-title { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 0.65rem; }
+    .mob-why-row {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.76rem; color: var(--dim); padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .mob-why-row:last-child { border-bottom: none; }
+    .mob-why-row .cv { color: var(--green); font-weight: 700; flex-shrink: 0; }
+  </style>
+  <script defer src="https://analytics.animesh.us/script.js" data-website-id="b1397736-939c-4843-bf24-384fb2289df3"></script>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="logo">
+    <div class="logo-mark"><img src="rustman-logo.svg" alt="Rustman" /></div>
+    RUSTMAN
+    <span class="logo-ver" id="logoVer">v0.4.0</span>
+  </a>
+  <div class="nav-sp"></div>
+  <div class="nav-links">
+    <a href="#features" class="nav-a">Features</a>
+    <a href="#compare" class="nav-a">Compare</a>
+    <a href="#roadmap" class="nav-a">Roadmap</a>
+    <a href="scripting.html" class="nav-a">Docs</a>
+    <a href="https://discord.gg/vfa8rKYzKG" class="nav-a" target="_blank" rel="noopener">Discord</a>
+  </div>
+  <a href="https://github.com/rust-man-org/rustman" class="nav-gh" target="_blank" rel="noopener">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+    GitHub
+  </a>
+  <a href="#download" class="nav-dl">Download</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-kicker">Built in Rust with iced &nbsp;·&nbsp; <span>MIT License</span></div>
+  <h1>Stop paying for your API client. <em>Seriously.</em></h1>
+  <p>I wanted an API client that keeps my data on my machine and doesn't ask me to log in, so I wrote Rustman in Rust. It is free and open source. Version 0.4.0 is the UI overhaul.</p>
+  <div class="hero-cta">
+    <a href="#download" class="btn-dl">
+      Download Free
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    </a>
+    <a href="https://github.com/rust-man-org/rustman" class="btn-gh" target="_blank" rel="noopener">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      View Source
+    </a>
+    <a href="scripting.html" class="btn-gh">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      Docs
+    </a>
+    <a href="https://discord.gg/vfa8rKYzKG" class="btn-gh" target="_blank" rel="noopener">
+      Join Discord
+    </a>
+  </div>
+</section>
+
+<!-- APP FRAME -->
+<div class="frame-section">
+  <div class="frame-halo" aria-hidden="true"></div>
+  <div class="app-frame" role="img" aria-label="Rustman 0.4.0 in the Violet theme, with a request and its JSON response side by side">
+    <div class="af-title">
+      <div class="af-brand">
+        <span class="af-lights"><span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span></span>
+        Rustman
+      </div>
+      <div class="af-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        Search or run command
+        <span class="af-kbd">Ctrl K</span>
+      </div>
+      <div class="af-tright">
+        <span class="af-ib"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span>
+        <span class="af-ib"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg></span>
+      </div>
+    </div>
+
+    <div class="af-body">
+      <div class="af-rail">
+        <span class="af-ib on"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+        <span class="af-ib"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>
+        <span class="af-ib"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></span>
+        <span class="af-ib"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9a6 6 0 0 1-6 6H6"/></svg></span>
+        <span class="af-sp"></span>
+        <span class="af-ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></span>
+      </div>
+
+      <div class="af-side">
+        <div class="af-side-head"><b>Collections</b><span class="af-new">New<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></div>
+        <div class="af-tree">
+          <div class="af-row col" style="padding-left:8px"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span class="af-name">Auth Service</span></div>
+          <div class="af-row" style="padding-left:28px"><span class="af-m af-post">POST</span><span class="af-name">Login</span></div>
+          <div class="af-row" style="padding-left:28px"><span class="af-m af-post">POST</span><span class="af-name">Refresh token</span></div>
+          <div class="af-row sel" style="padding-left:28px"><span class="af-m af-get">GET</span><span class="af-name">Who am I</span></div>
+          <div class="af-row col" style="padding-left:8px"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span class="af-name">Acme API</span></div>
+          <div class="af-row" style="padding-left:28px"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span class="af-name">Users</span></div>
+          <div class="af-row" style="padding-left:48px"><span class="af-m af-get">GET</span><span class="af-name">List users</span></div>
+          <div class="af-row" style="padding-left:48px"><span class="af-m af-post">POST</span><span class="af-name">Create user</span></div>
+          <div class="af-row" style="padding-left:48px"><span class="af-m af-put">PUT</span><span class="af-name">Update user</span></div>
+          <div class="af-row" style="padding-left:48px"><span class="af-m af-del">DEL</span><span class="af-name">Deactivate user</span></div>
+          <div class="af-row" style="padding-left:28px"><span class="af-m af-get">GET</span><span class="af-name">Health check</span></div>
+        </div>
+      </div>
+
+      <div class="af-main">
+        <div class="af-tabs">
+          <div class="af-dtab on"><span class="af-m af-get">GET</span><span class="af-t">Who am I</span><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+          <div class="af-dtab"><span class="af-m af-post">POST</span><span class="af-t">Login</span></div>
+          <div class="af-dtab"><span class="af-m af-get">GET</span><span class="af-t">List users</span><span class="af-udot"></span></div>
+          <span class="af-ib af-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+
+        <div class="af-urlrow">
+          <div class="af-field">
+            <span class="af-mdd"><span class="af-m af-get">GET</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+            <span class="af-url"><span class="af-var">{{base_url}}</span>/users/me</span>
+          </div>
+          <span class="af-send">Send</span>
+          <span class="af-env"><span class="af-edot"></span>Staging<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+        </div>
+
+        <div class="af-panes">
+          <div class="af-pane af-req">
+            <div class="af-ptabs">
+              <span class="af-ptab">Params</span>
+              <span class="af-ptab on">Headers<span class="af-n">3</span></span>
+              <span class="af-ptab">Body</span>
+              <span class="af-ptab">Auth</span>
+              <span class="af-ptab">Scripts</span>
+            </div>
+            <div class="af-kv-row"><span><span class="af-cb"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span></span><span>Authorization</span><span class="af-v">Bearer&nbsp;<span class="af-var">{{token}}</span></span></div>
+            <div class="af-kv-row"><span><span class="af-cb"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span></span><span>Accept</span><span class="af-v">application/json</span></div>
+            <div class="af-kv-row"><span><span class="af-cb"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span></span><span>X-Tenant</span><span class="af-v"><span class="af-var">{{tenant}}</span></span></div>
+            <div class="af-kv-row ph"><span></span><span>Add header</span><span class="af-v">Value</span></div>
+          </div>
+
+          <div class="af-pane af-res">
+            <div class="af-ptabs">
+              <span class="af-ptab on">Body</span>
+              <span class="af-ptab">Headers<span class="af-n">6</span></span>
+              <span class="af-ptab">Cookies<span class="af-n">1</span></span>
+              <span class="af-ptab">Tests<span class="af-n">2</span></span>
+              <div class="af-end"><span class="af-status">200 OK</span><span class="af-meta">48 ms · 1.2 KB</span></div>
+            </div>
+            <div class="af-code"><div class="af-ln"><i>1</i><span><span class="af-p">{</span></span></div><div class="af-ln"><i>2</i><span>  <span class="af-k">"id"</span><span class="af-p">:</span> <span class="af-nu">42</span><span class="af-p">,</span></span></div><div class="af-ln"><i>3</i><span>  <span class="af-k">"name"</span><span class="af-p">:</span> <span class="af-s">"Ada Lovelace"</span><span class="af-p">,</span></span></div><div class="af-ln"><i>4</i><span>  <span class="af-k">"email"</span><span class="af-p">:</span> <span class="af-s">"ada@example.com"</span><span class="af-p">,</span></span></div><div class="af-ln"><i>5</i><span>  <span class="af-k">"role"</span><span class="af-p">:</span> <span class="af-s">"admin"</span><span class="af-p">,</span></span></div><div class="af-ln"><i>6</i><span>  <span class="af-k">"active"</span><span class="af-p">:</span> <span class="af-l">true</span><span class="af-p">,</span></span></div><div class="af-ln"><i>7</i><span>  <span class="af-k">"teams"</span><span class="af-p">: [</span><span class="af-s">"core"</span><span class="af-p">,</span> <span class="af-s">"billing"</span><span class="af-p">],</span></span></div><div class="af-ln"><i>8</i><span>  <span class="af-k">"manager"</span><span class="af-p">:</span> <span class="af-l">null</span><span class="af-p">,</span></span></div><div class="af-ln"><i>9</i><span>  <span class="af-k">"createdAt"</span><span class="af-p">:</span> <span class="af-s">"2024-01-15T10:30:00Z"</span></span></div><div class="af-ln"><i>10</i><span><span class="af-p">}</span></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="af-statusbar">
+      <span class="af-sb"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9a6 6 0 0 1-6 6H6"/></svg>main</span>
+      <span class="af-sp"></span>
+      <span class="af-sb">Staging</span>
+    </div>
+  </div>
+</div>
+
+<!-- WHAT'S NEW -->
+<section class="roadmap-section" id="whats-new">
+  <div class="sec-label">What's new</div>
+  <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:.75rem">What's new in 0.4.0</h2>
+  <p style="font-size:.95rem;color:var(--dim);max-width:520px;line-height:1.75;margin-bottom:2rem">0.4.0 is the UI overhaul: a new design, about 115 bugs fixed, faster requests and history, and saving in the background.</p>
+
+  <div class="rm-grid">
+
+    <!-- Redesign -->
+    <div class="rm-group rm-lead">
+      <div class="rm-head"><div class="rm-dot rd-flow"></div><span>The redesign</span></div>
+      <div class="rm-lead-items">
+        <div class="rm-item">
+          <div class="rm-item-top">
+            <div class="rm-item-t">One calm surface</div>
+          </div>
+          <div class="rm-item-d">Underline tabs, one URL field with the method inside it, and the response status, time and size in the tab bar. Loading and error states have a Retry button.</div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-item-top">
+            <div class="rm-item-t">Settings as a page</div>
+          </div>
+          <div class="rm-item-d">Eight themes as preview cards, plus General, Network &amp; TLS, Cloud, Shortcuts and About. The command palette groups open tabs, saved requests, history and commands.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speed -->
+    <div class="rm-group">
+      <div class="rm-head"><div class="rm-dot rd-proto"></div><span>Speed</span></div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Opening requests and history</div>
+        </div>
+        <div class="rm-item-d">Opening a request or a history entry took 1–3 s. It now takes a few milliseconds.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Saving in the background</div>
+        </div>
+        <div class="rm-item-d">With a 5 MB request open, autosave froze the window for about 0.1 s. It now takes about 1 ms, and quitting writes the latest changes first.</div>
+      </div>
+    </div>
+
+    <!-- Fixes -->
+    <div class="rm-group">
+      <div class="rm-head"><div class="rm-dot rd-script"></div><span>Fixes and safety</span></div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">About 115 bugs fixed</div>
+        </div>
+        <div class="rm-item-d">From cURL paste, Windows cmd and PowerShell copies included, and compressed responses to Postman import, drag and drop, and settings that reset on restart.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Cloud sync</div>
+        </div>
+        <div class="rm-item-d">Save collections to a private S3-compatible bucket. Rustman asks which workspace to keep when two devices edit before syncing.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t"><code>rustman-cli run</code></div>
+          <span class="rm-chip ch-ship">New</span>
+        </div>
+        <div class="rm-item-d">Sends a collection's requests from a terminal or CI, and exits with status 1 when one fails.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- BENTO FEATURES -->
+<section class="bento-section" id="features">
+  <div class="sec-label">Features</div>
+  <div class="bento">
+
+    <!-- A: Rust HTTP -->
+    <div class="bcard b-a">
+      <div class="bcard-label">Core</div>
+      <div class="bcard-title">Native Rust HTTP engine</div>
+      <div class="bcard-desc">Requests go through <code>reqwest</code>, not a browser, so there are no CORS limits. Compressed responses are decoded, and you see the headers and size as they came over the wire.</div>
+      <div class="http-demo">
+        <div class="hline req"><span class="hacc">→</span> POST /auth/login HTTP/1.1</div>
+        <div class="hline req"><span class="hkey">Authorization:</span> <span class="hval">Bearer ey••••••</span></div>
+        <div class="hline req"><span class="hkey">Content-Type:</span> <span class="hval">application/json</span></div>
+        <div class="hline req"><span class="hkey">X-Tenant:</span> <span class="hval">acme</span></div>
+        <hr class="hsep"/>
+        <div class="hline resp-ok">← HTTP/1.1 200 OK &nbsp;<span class="hms">48ms</span></div>
+        <div class="hline resp-data"><span class="hkey">"token":</span> <span class="hval">"eyJhbGci..."</span></div>
+        <div class="hline resp-data"><span class="hkey">"role":</span> <span class="hval">"admin"</span></div>
+      </div>
+    </div>
+
+    <!-- B: No telemetry -->
+    <div class="bcard b-b">
+      <div class="bcard-label">Privacy</div>
+      <div class="bcard-title">Zero telemetry</div>
+      <div class="bcard-desc">Rustman stores your work locally. Optional Cloud sync uses a bucket you configure. No analytics or crash reports.</div>
+      <div class="privacy-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <div class="privacy-stat">0 bytes sent to us. ever.</div>
+    </div>
+
+    <!-- C: Install size -->
+    <div class="bcard b-c">
+      <div class="bcard-label">Lightweight</div>
+      <div class="bcard-title">Install size</div>
+      <div class="size-display">~30<span style="font-size:1.2rem;color:var(--dim)">MB</span></div>
+      <div class="size-bar">
+        <div class="size-bar-row">
+          <span style="color:var(--accent);width:68px">Rustman</span>
+          <div class="size-bar-track"><div class="size-bar-fill fill-us"></div></div>
+          <span>~30 MB</span>
+        </div>
+        <div class="size-bar-row">
+          <span style="color:var(--red);width:68px">Postman</span>
+          <div class="size-bar-track"><div class="size-bar-fill fill-pm"></div></div>
+          <span>350 MB</span>
+        </div>
+        <div class="size-bar-row">
+          <span style="color:var(--yellow);width:68px">Bruno</span>
+          <div class="size-bar-track"><div class="size-bar-fill fill-br"></div></div>
+          <span>100 MB</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- D: Code editor -->
+    <div class="bcard b-d">
+      <div class="bcard-label">Editor</div>
+      <div class="bcard-title">Built in code editor</div>
+      <div class="editor-mock">
+        <span class="ek">const</span> body = {<br>
+        &nbsp;&nbsp;<span class="ek">email</span>: <span class="es">"user@x.com"</span>,<br>
+        &nbsp;&nbsp;<span class="ek">role</span>: <span class="es">"admin"<span class="cursor"></span></span><br>
+        }
+      </div>
+    </div>
+
+    <!-- E: Cloud sync -->
+    <div class="bcard b-e">
+      <div class="bcard-label">Cloud sync</div>
+      <div class="bcard-title">Your collections on every device</div>
+      <div class="bcard-desc">Connect a private S3-compatible bucket in Settings. Collections sync when you save, and you can keep working offline.</div>
+    </div>
+
+    <!-- F: Themes -->
+    <div class="bcard b-f">
+      <div class="bcard-label">Theming</div>
+      <div class="bcard-title">Eight themes</div>
+      <div class="bcard-desc">Violet, Amber, Midnight, Nord, Dracula, Kanagawa, Solarized and Light, picked from preview cards in Settings.</div>
+      <div class="theme-dots">
+        <div class="tdot td-flame active"></div>
+        <div class="tdot td-violet"></div>
+        <div class="tdot td-cobalt"></div>
+        <div class="tdot td-emerald"></div>
+        <div class="tdot td-rose"></div>
+        <div class="tdot td-midnight"></div>
+      </div>
+    </div>
+
+    <!-- G: Command palette -->
+    <div class="bcard b-g">
+      <div class="bcard-label">Speed</div>
+      <div class="bcard-title">Command palette</div>
+      <div class="bcard-desc">Ctrl/Cmd+K searches open tabs, saved requests, history and commands, in groups.</div>
+      <div class="coll-mini" style="margin-top:.7rem">
+        <div class="cm-row" style="color:var(--accent)">⌘K  search requests, tabs, history…</div>
+        <div class="cm-row cmsel">Send Request</div>
+        <div class="cm-row">New Tab</div>
+        <div class="cm-row">Import cURL From Clipboard</div>
+      </div>
+    </div>
+
+    <!-- H: Collections -->
+    <div class="bcard b-h">
+      <div class="bcard-label">Organization</div>
+      <div class="bcard-title">Collections</div>
+      <div class="coll-mini">
+        <div class="cm-row"><span class="mp" style="font-size:.58rem">POST</span> /login</div>
+        <div class="cm-row cmsel"><span class="mg" style="font-size:.58rem">GET</span> /me</div>
+        <div class="cm-row"><span class="mp" style="font-size:.58rem">POST</span> /refresh</div>
+        <div class="cm-row"><span class="mg" style="font-size:.58rem">GET</span> /users</div>
+        <div class="cm-row"><span class="md" style="font-size:.58rem">DEL</span> /users/:id</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mobile feature list (hidden on desktop) -->
+  <div class="mob-features">
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+      <div><div class="mob-feat-t">Native Rust HTTP</div><div class="mob-feat-d">Requests go through reqwest, not a browser, so there are no CORS limits. Compressed responses are decoded.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+      <div><div class="mob-feat-t">Zero telemetry</div><div class="mob-feat-d">Rustman stores your work locally and has no analytics or crash reports.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+      <div><div class="mob-feat-t">Cloud sync</div><div class="mob-feat-d">Connect a private S3-compatible bucket. Your saved collections sync across devices.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      <div><div class="mob-feat-t">WebSocket</div><div class="mob-feat-d">Type a ws or wss URL and the panel switches to WebSocket mode. Send and receive on a live feed.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+      <div><div class="mob-feat-t">Code editor</div><div class="mob-feat-d">Syntax highlighting and line numbers for the request body and the response, with full selection.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+      <div><div class="mob-feat-t">Collections &amp; history</div><div class="mob-feat-d">Folders, drag and drop, and history that records each request as it was sent. Stored in local SQLite.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <div><div class="mob-feat-t">All auth types</div><div class="mob-feat-d">Bearer, Basic, API key, Cookie and JWT, with <code>{{variables}}</code> in every field.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+      <div><div class="mob-feat-t">Eight themes</div><div class="mob-feat-d">Violet, Amber, Midnight, Nord, Dracula, Kanagawa, Solarized and Light.</div></div>
+    </div>
+    <div class="mob-feat">
+      <div class="mob-feat-ic"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+      <div><div class="mob-feat-t">Command line runner</div><div class="mob-feat-d"><code>rustman-cli run</code> sends a collection from a terminal or CI and exits non-zero when a request fails.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SCRIPTS -->
+<section class="scripts-section" id="scripts">
+  <div class="sec-label">Scripting</div>
+  <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:.75rem">A scripting language built in Rust, not borrowed from Node.</h2>
+  <p style="font-size:.95rem;color:var(--dim);max-width:560px;line-height:1.75;margin-bottom:2rem">Pre-request and test scripts run on <strong style="color:var(--text)">rustman-engine</strong>, a small interpreted language written in Rust. There is no embedded JS runtime and no <code style="font-family:'JetBrains Mono',monospace;font-size:.85em;background:var(--bg3);padding:.1em .35em;border-radius:4px;color:var(--accent);border:1px solid var(--bord2)">pm.*</code> API to memorize. It covers env vars, headers, cookies, JWT decoding, base64 and JSON assertions, in a syntax small enough for an LLM to write correctly from a plain-English request. A pre-request script's <code style="font-family:'JetBrains Mono',monospace;font-size:.85em;background:var(--bg3);padding:.1em .35em;border-radius:4px;color:var(--accent);border:1px solid var(--bord2)">set_env</code> applies to the request it runs for. The grammar and built-ins are on the <a href="scripting.html">scripting docs page</a>.</p>
+  <div class="scripts-grid">
+    <div class="script-card">
+      <div class="sc-head"><div class="scdot sd-pre"></div><span>Pre-request script</span></div>
+      <pre><span class="pc">// inject a bearer token, only if one is set</span>
+<span class="pk">let</span> token = <span class="pf">env</span>(<span class="ps">"access_token"</span>)
+<span class="pk">if</span> token != <span class="ps">""</span> {
+    <span class="pf">set_header</span>(<span class="ps">"Authorization"</span>, <span class="ps">"Bearer "</span> + token)
+}</pre>
+    </div>
+    <div class="script-card">
+      <div class="sc-head"><div class="scdot sd-test"></div><span>Test script, post-response</span></div>
+      <pre><span class="pc">// check the login, then save its token</span>
+<span class="pf">test</span>(<span class="ps">"status is 200"</span>, response.status == <span class="pn">200</span>)
+
+<span class="pk">let</span> token = response.<span class="pf">json</span>().token
+<span class="pf">test</span>(<span class="ps">"has a token"</span>, token != <span class="pk">null</span>)
+<span class="pk">if</span> token != <span class="pk">null</span> {
+    <span class="pf">set_env</span>(<span class="ps">"user_id"</span>, <span class="pf">jwt_decode</span>(token).payload.sub)
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare-section" id="compare">
+  <div class="sec-label">Compare</div>
+  <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:.75rem">Rustman vs the rest</h2>
+  <p style="font-size:.95rem;color:var(--dim);max-width:520px;line-height:1.75;margin-bottom:2rem">How it stacks up against Postman and Bruno.</p>
+
+  <!-- Mobile compare (hidden on desktop) -->
+  <div class="mob-compare">
+    <div class="mob-stat"><div class="mob-stat-v">Free</div><div class="mob-stat-l">vs $14/mo Postman</div></div>
+    <div class="mob-stat"><div class="mob-stat-v">~30 MB</div><div class="mob-stat-l">vs 350 MB Postman</div></div>
+    <div class="mob-stat"><div class="mob-stat-v">0 bytes</div><div class="mob-stat-l">sent to any server</div></div>
+    <div class="mob-stat"><div class="mob-stat-v">No login</div><div class="mob-stat-l">account never required</div></div>
+    <div class="mob-why">
+      <div class="mob-why-title">Rustman also has</div>
+      <div class="mob-why-row"><span class="cv">✓</span> Native HTTP engine, no CORS limits</div>
+      <div class="mob-why-row"><span class="cv">✓</span> Cloud sync with your own S3-compatible bucket</div>
+      <div class="mob-why-row"><span class="cv">✓</span> Native GUI, no webview and no Electron</div>
+      <div class="mob-why-row"><span class="cv">✓</span> Session restore, pick up where you left off</div>
+    </div>
+  </div>
+
+  <div class="cmp-wrap">
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th style="width:36%">Feature</th>
+        <th class="cu" style="width:21%">Rustman</th>
+        <th style="width:21%">Postman</th>
+        <th style="width:22%">Bruno</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="fname">Price</td><td class="cu"><span class="cv">Free forever</span></td><td><span class="cp">Freemium / $14mo</span></td><td><span class="cv">Free</span></td></tr>
+      <tr><td class="fname">Open source</td><td class="cu"><span class="cv">✓</span></td><td><span class="cx">✗ Proprietary</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Install size</td><td class="cu"><span class="cv">~30 MB</span></td><td><span class="cx">~350 MB</span></td><td><span class="cp">~100 MB</span></td></tr>
+      <tr><td class="fname">No account required</td><td class="cu"><span class="cv">✓</span></td><td><span class="cx">✗ Mandatory</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Zero telemetry</td><td class="cu"><span class="cv">✓ No telemetry</span></td><td><span class="cx">✗ Cloud sync</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Works offline</td><td class="cu"><span class="cv">✓</span></td><td><span class="cp">Limited</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Native HTTP, no CORS</td><td class="cu"><span class="cv">✓ Rust/reqwest</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td></tr>
+      <tr><td class="fname">Native GUI, no webview</td><td class="cu"><span class="cv">✓ iced</span></td><td><span class="cx">✗ Electron</span></td><td><span class="cx">✗ Electron</span></td></tr>
+      <tr><td class="fname">WebSocket</td><td class="cu"><span class="cv">✓</span></td><td><span class="cv">✓</span></td><td><span class="cx">✗</span></td></tr>
+      <tr><td class="fname">Code editor</td><td class="cu"><span class="cv">✓ syntect</span></td><td><span class="cp">Basic</span></td><td><span class="cp">Basic</span></td></tr>
+      <tr><td class="fname">Large response viewer</td><td class="cu"><span class="cv">✓</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td></tr>
+      <tr><td class="fname">Postman collection import</td><td class="cu"><span class="cv">✓ v2.0 / v2.1</span></td><td><span class="cv">✓</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Multi-tab editing</td><td class="cu"><span class="cv">✓</span></td><td><span class="cv">✓</span></td><td><span class="cp">Limited</span></td></tr>
+      <tr><td class="fname">Session restore</td><td class="cu"><span class="cv">✓</span></td><td><span class="cv">✓</span></td><td><span class="cx">✗</span></td></tr>
+      <tr><td class="fname">Pre/post scripts</td><td class="cu"><span class="cv">✓ Rust-native</span></td><td><span class="cv">✓</span></td><td><span class="cv">✓</span></td></tr>
+      <tr><td class="fname">Command line runner</td><td class="cu"><span class="cv">✓ rustman-cli</span></td><td><span class="cv">✓ Newman</span></td><td><span class="cv">✓ Bruno CLI</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="table-note">Based on publicly available info. Postman pricing subject to change.</p>
+</section>
+
+<!-- ROADMAP -->
+<section class="roadmap-section" id="roadmap">
+  <div class="sec-label">Roadmap</div>
+  <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:.75rem">What is coming next</h2>
+  <p style="font-size:.95rem;color:var(--dim);max-width:520px;line-height:1.75;margin-bottom:2rem">This is what I am working on next. Nothing on this list is a promise or a date.</p>
+
+  <div class="rm-grid">
+
+    <!-- Flows -->
+    <div class="rm-group rm-lead">
+      <div class="rm-head"><div class="rm-dot rd-flow"></div><span>Flows</span></div>
+      <div class="rm-lead-items">
+        <div class="rm-item">
+          <div class="rm-item-top">
+            <div class="rm-item-t">Saved flows</div>
+            <span class="rm-chip ch-next">Next up</span>
+          </div>
+          <div class="rm-item-d">A named chain of requests that runs start to finish on demand, and runs again the same way whenever you want it to. Values pulled out of one response feed into the next request.</div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-item-top">
+            <div class="rm-item-t">Browser capture into a flow</div>
+            <span class="rm-chip ch-exp">Exploring</span>
+          </div>
+          <div class="rm-item-d">A browser opened from inside Rustman that records the requests a real app fires while you click through it, and writes them into a flow.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Protocols and formats -->
+    <div class="rm-group">
+      <div class="rm-head"><div class="rm-dot rd-proto"></div><span>Protocols and formats</span></div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">GraphQL</div>
+          <span class="rm-chip ch-ship">Shipped in 0.3.15</span>
+        </div>
+        <div class="rm-item-d">A GraphQL body type with Query and Variables panes.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">GraphQL schema awareness</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+        <div class="rm-item-d">Autocomplete and validation from a fetched schema.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">gRPC</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Collection runner</div>
+          <span class="rm-chip ch-ship">CLI in 0.4.0</span>
+        </div>
+        <div class="rm-item-d"><code>rustman-cli run</code> sends a whole collection in order and prints every result. A runner inside the app is still planned.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Code generation beyond cURL</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+        <div class="rm-item-d">Export a request as code for other languages and clients. cURL export works today.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">OpenAPI YAML import</div>
+          <span class="rm-chip ch-ship">Shipped in 0.3.15</span>
+        </div>
+        <div class="rm-item-d">The import file picker now accepts <code>.yaml</code>/<code>.yml</code> Swagger and OpenAPI specs, not only <code>.json</code>.</div>
+      </div>
+    </div>
+
+    <!-- Scripting engine -->
+    <div class="rm-group">
+      <div class="rm-head"><div class="rm-dot rd-script"></div><span>Scripting engine</span></div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t"><a href="scripting.html#builtins"><code>contains</code></a></div>
+          <span class="rm-chip ch-ship">Shipped in 0.3.13</span>
+        </div>
+        <div class="rm-item-d">Substring and membership tests in pre-request and test scripts. On an object it tests whether a key is there.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Loops and array helpers</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Regex matching</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Hashing and HMAC builtins</div>
+          <span class="rm-chip ch-plan">Planned</span>
+        </div>
+        <div class="rm-item-d">The engine has AES and base64 today. There is no standalone hash or HMAC function in it.</div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-item-top">
+          <div class="rm-item-t">Script formatter</div>
+          <span class="rm-chip ch-exp">Exploring</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="dl-section" id="download">
+  <div class="sec-label" style="justify-content:center">Download</div>
+  <div class="dl-top">
+    <h2>Get Rustman</h2>
+    <p>Free, open source, around 30 MB. No sign up and no telemetry.</p>
+    <a class="dl-btn" href="https://github.com/rust-man-org/rustman/releases/latest" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      Download Latest Release
+    </a><br>
+    <span class="dl-ver"><span id="dlVer">v0.4.0</span> · macOS · Windows · Linux · MIT License</span>
+    <div class="dl-plats">
+      <a class="dl-plat" href="https://github.com/rust-man-org/rustman/releases/latest" target="_blank" rel="noopener">
+        <div class="dl-plat-name">macOS</div>
+        <div class="dl-plat-fmt">Universal .dmg<br>Apple Silicon + Intel</div>
+        <div class="dl-plat-cta">Download →</div>
+      </a>
+      <a class="dl-plat" href="https://github.com/rust-man-org/rustman/releases/latest" target="_blank" rel="noopener">
+        <div class="dl-plat-name">Windows</div>
+        <div class="dl-plat-fmt">x86_64 and arm64 .zip</div>
+        <div class="dl-plat-cta">Download →</div>
+      </a>
+      <a class="dl-plat" href="https://github.com/rust-man-org/rustman/releases/latest" target="_blank" rel="noopener">
+        <div class="dl-plat-name">Linux</div>
+        <div class="dl-plat-fmt">x86_64 and arm64 .tar.gz</div>
+        <div class="dl-plat-cta">Download →</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="src-block">
+    <div class="src-top">
+      <span>Build from source</span>
+      <a href="https://github.com/rust-man-org/rustman" style="font-size:.72rem;color:var(--accent);font-weight:600" target="_blank" rel="noopener">View on GitHub →</a>
+    </div>
+    <pre><span class="pc2"># Requires Rust 1.88+, a C compiler and CMake</span>
+<span class="pcmd">git clone</span> https://github.com/rust-man-org/rustman
+<span class="pcmd">cd</span> rustman
+<span class="pcmd">cargo build --release</span></pre>
+  </div>
+  <p class="req-note">
+    Needs a <a href="https://www.rust-lang.org/tools/install" target="_blank" rel="noopener">Rust toolchain</a> (1.88 or newer), plus a C compiler and CMake for bundled dependencies including SQLite and AWS-LC. <code style="font-family:'JetBrains Mono',monospace">cargo build --release -p rustman-cli</code> builds the command line runner. The full guide is in <a href="https://github.com/rust-man-org/rustman/blob/master/docs/DEVELOPMENT.md" target="_blank" rel="noopener">docs/DEVELOPMENT.md</a>.
+  </p>
+</section>
+
+<footer>
+  <p>
+    Made by <a href="https://animesh.us" target="_blank" rel="noopener">Animesh Chaudhri</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/rust-man-org/rustman" target="_blank" rel="noopener">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://discord.gg/vfa8rKYzKG" target="_blank" rel="noopener">Discord</a>
+    &nbsp;·&nbsp;
+    MIT License
+    &nbsp;·&nbsp;
+    <a href="https://github.com/rust-man-org/rustman/issues" target="_blank" rel="noopener">Report a bug</a>
+  </p>
+</footer>
+
+<script>
+  // Pull the live version straight from Cargo.toml on GitHub, so this page
+  // never drifts out of sync with an actual release the way a hand-edited
+  // badge does. Falls back to the hardcoded text already in the markup
+  // (kept roughly current) if the fetch fails for any reason.
+  fetch("https://raw.githubusercontent.com/rust-man-org/rustman/master/Cargo.toml")
+    .then((res) => (res.ok ? res.text() : Promise.reject(res.status)))
+    .then((text) => {
+      const match = text.match(/^version\s*=\s*"([^"]+)"/m);
+      if (!match) return;
+      const label = "v" + match[1];
+      const logoVer = document.getElementById("logoVer");
+      const dlVer = document.getElementById("dlVer");
+      if (logoVer) logoVer.textContent = label;
+      if (dlVer) dlVer.textContent = label;
+    })
+    .catch(() => {});
+</script>
+
+</body>
+</html>

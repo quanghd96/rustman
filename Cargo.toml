@@ -1,0 +1,197 @@
+[package]
+name = "rustman"
+version = "0.4.0"
+edition = "2024"
+description = "Rustman — pure-Rust native API testing tool built with iced"
+authors = ["animeshchaudhri"]
+
+[[bin]]
+name = "rustman"
+path = "src/main.rs"
+
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+authors = ["animeshchaudhri"]
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+rustman-core = { path = "crates/rustman-core" }
+rustman-formats = { path = "crates/rustman-formats" }
+rustman-http = { path = "crates/rustman-http" }
+rustman-script = { path = "crates/rustman-script" }
+rustman-store = { path = "crates/rustman-store" }
+rustman-testkit = { path = "crates/rustman-testkit" }
+rustman-update = { path = "crates/rustman-update" }
+# The pre-request/test scripting language: its own repo under rust-man-org.
+# Bump the tag to pick up engine changes. For local engine work, point the
+# override at a checkout instead:
+#   [patch."https://github.com/rust-man-org/rustman-engine"]
+#   rustman-engine = { path = "../rust-man-org/rustman-engine" }
+rustman-engine = { git = "https://github.com/rust-man-org/rustman-engine", tag = "v0.1.1" }
+
+# rustman-http decodes response bodies itself, so the wire headers and size
+# survive and the size cap applies to the decoded body.
+async-compression = { version = "0.4", features = ["tokio", "gzip", "zlib", "brotli", "zstd"] }
+base64 = "0.23"
+dirs = "6"
+flate2 = "1"
+futures-util = "0.3"
+hmac = "0.13"
+reqwest = { version = "0.13", default-features = false, features = [
+    "json",
+    "query",
+    "form",
+    "cookies",
+    "multipart",
+    "stream",
+    "rustls",
+    "rustls-native-certs",
+] }
+# aws-lc is the one crypto provider linked in; reqwest and tungstenite share it.
+rustls = { version = "0.23.43", default-features = false, features = ["aws_lc_rs"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
+self-replace = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+sha2 = "0.11"
+tar = "0.4"
+thiserror = "2"
+# Members pick the runtime features they use.
+tokio = { version = "1", default-features = false }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+assigning_clones = "warn"
+cast_lossless = "warn"
+cast_possible_truncation = "warn"
+cast_possible_wrap = "warn"
+cast_sign_loss = "warn"
+cloned_instead_of_copied = "warn"
+doc_markdown = "warn"
+explicit_into_iter_loop = "warn"
+explicit_iter_loop = "warn"
+flat_map_option = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+items_after_statements = "warn"
+manual_let_else = "warn"
+manual_string_new = "warn"
+map_unwrap_or = "warn"
+match_wildcard_for_single_variants = "warn"
+needless_pass_by_value = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+ref_option = "warn"
+semicolon_if_nothing_returned = "warn"
+too_many_lines = "warn"
+trivially_copy_pass_by_ref = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+unused_self = "warn"
+
+[features]
+# The default build ships the in-app updater: Settings → Updates checks GitHub
+# releases, and a newer release can replace the running binary. The launch
+# check itself is opt-in.
+#
+# Distro packages build with `--no-default-features`. The package manager owns
+# /usr/bin/rustman and delivers updates, so for those builds the updater, its
+# boot-time check and its archive/swapping dependencies are compiled out
+# entirely — nothing in the binary can overwrite a package-owned file.
+default = ["self-update"]
+self-update = ["dep:rustman-update"]
+
+[dependencies]
+# GUI
+iced = { version = "0.14", features = ["tokio", "advanced", "image", "svg"] }
+iced_core = "0.14"
+# Glyph advances for label overflow prediction (see ui/tree_label.rs)
+ttf-parser = "0.25"
+unicode-width = "0.2"
+# Full-featured code editor widget (line numbers, syntect highlight, selection,
+# undo). The rust-man-org fork is pinned by tag in [patch.crates-io] below.
+iced-code-editor = "0.3.13"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# HTTP client
+reqwest.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+
+# Async runtime (trimmed: task/select/sync/fs only — net, io, signal and
+# process come transitively only if someone actually needs them)
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time", "fs"] }
+# Cooperative cancellation for background jobs (CancellationToken)
+tokio-util.workspace = true
+futures-util.workspace = true
+
+# Domain model, import/export formats, HTTP/WebSocket transport and SQLite
+rustman-core.workspace = true
+rustman-formats.workspace = true
+rustman-http.workspace = true
+rustman-store.workspace = true
+
+# Serialisation
+serde.workspace = true
+serde_json.workspace = true
+
+# The SQLite connection the app holds
+rusqlite.workspace = true
+
+# Inline file data in form fields
+base64.workspace = true
+
+# In-app self-update (feature `self-update`, on by default). Optional so
+# package-manager builds (`--no-default-features`) drop it entirely.
+rustman-update = { workspace = true, optional = true }
+
+# Misc
+uuid.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+dirs.workspace = true
+open = "5"
+rfd = "0.17"
+
+# Response preview: spreadsheet (pure Rust). HTML responses are converted to
+# readable text instead of embedding a native web engine.
+calamine = "0.36"
+
+# Pre-request and test scripts, through rustman-engine.
+rustman-script.workspace = true
+
+[dev-dependencies]
+rustman-testkit.workspace = true
+# Tests drive the app's tasks to completion.
+iced_runtime = "0.14"
+
+# The spreadsheet tests hand-build a minimal .xlsx at runtime.
+zip.workspace = true
+
+# The editor widget is the rust-man-org fork of upstream iced-code-editor,
+# pinned by tag. For local work against a checkout, swap this to:
+# iced-code-editor = { path = "../rust-man-org/iced-code-editor-rustman" }
+[patch.crates-io]
+iced-code-editor = { git = "https://github.com/rust-man-org/iced-code-editor-rustman", tag = "v0.3.13" }
+
+[profile.release]
+opt-level = 'z'
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[target."cfg(windows)".build-dependencies]
+winresource = "0.1.31"
