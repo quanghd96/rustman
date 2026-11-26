@@ -4760,7 +4760,7 @@ dependencies = [
 
 [[package]]
 name = "rustman"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.23.0",
  "calamine",
@@ -4798,7 +4798,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dirs",
  "rustman-core",
@@ -4814,7 +4814,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.23.0",
  "hmac",
@@ -4837,9 +4837,10 @@ dependencies = [
 
 [[package]]
 name = "rustman-formats"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.23.0",
+ "percent-encoding",
  "rustman-core",
  "rustman-testkit",
  "serde",
@@ -4850,7 +4851,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-http"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-compression",
  "base64 0.23.0",
@@ -4867,7 +4868,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-script"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rustman-core",
  "rustman-engine",
@@ -4875,7 +4876,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-store"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rusqlite",
  "rustman-core",
@@ -4888,7 +4889,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-testkit"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rustman-core",
  "serde",
@@ -4898,7 +4899,7 @@ dependencies = [
 
 [[package]]
 name = "rustman-update"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "flate2",
  "reqwest",

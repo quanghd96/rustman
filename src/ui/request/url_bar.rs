@@ -3,7 +3,7 @@
 //! environment chip.
 
 use iced::widget::{Space, column, container, row, text, text_editor};
-use iced::{Alignment, Background, Border, Color, Element, Length, Padding};
+use iced::{Alignment, Background, Border, Color, Element, Length, Padding, keyboard};
 
 use crate::domain::environment::AppEnvironment;
 use crate::domain::request::HttpMethod;
@@ -36,6 +36,7 @@ pub fn view<'a>(
     env: Option<&'a AppEnvironment>,
     environments: &'a [AppEnvironment],
     open_menu: Option<MenuId>,
+    allow_url_submit: bool,
     t: &'a Tokens,
 ) -> Element<'a, Message> {
     let ws = tab.is_websocket();
@@ -44,7 +45,8 @@ pub fn view<'a>(
     } else {
         method_menu(tab, open_menu == Some(MenuId::Method), t)
     };
-    let mut bar = row![url_field(lead, tab, t)]
+    let send_on_enter = allow_url_submit && !ws && !tab.is_loading && !tab.url.trim().is_empty();
+    let mut bar = row![url_field(lead, tab, send_on_enter, t)]
         .spacing(SPACE_MD)
         .align_y(Alignment::Center)
         .padding([SPACE_MD, SPACE_LG]);
@@ -64,11 +66,17 @@ pub fn view<'a>(
     outer.into()
 }
 
-fn url_field<'a>(lead: Element<'a, Message>, tab: &'a RequestTabState, t: &'a Tokens) -> Element<'a, Message> {
+fn url_field<'a>(
+    lead: Element<'a, Message>,
+    tab: &'a RequestTabState,
+    send_on_enter: bool,
+    t: &'a Tokens,
+) -> Element<'a, Message> {
     let editor = text_editor(&tab.url_editor)
         .id(URL_EDITOR_ID)
         .placeholder("Enter a URL, or paste a cURL command")
         .on_action(|action| Message::Request(RequestMsg::UrlEdited(action)))
+        .key_binding(move |press| url_key_binding(press, send_on_enter))
         .font(MONO)
         .size(TEXT_MD)
         .height(Length::Shrink)
@@ -91,6 +99,23 @@ fn url_field<'a>(lead: Element<'a, Message>, tab: &'a RequestTabState, t: &'a To
         },
         ..Default::default()
     })
+}
+
+fn url_key_binding(
+    press: text_editor::KeyPress,
+    send_on_enter: bool,
+) -> Option<text_editor::Binding<Message>> {
+    use text_editor::{Binding, Status};
+
+    if send_on_enter
+        && matches!(press.status, Status::Focused { .. })
+        && press.modifiers.is_empty()
+        && press.key == keyboard::Key::Named(keyboard::key::Named::Enter)
+    {
+        Some(Binding::Custom(Message::Request(RequestMsg::Send)))
+    } else {
+        Binding::from_key_press(press)
+    }
 }
 
 fn editor_style(t: &Tokens) -> text_editor::Style {
@@ -326,6 +351,36 @@ fn expanded_url<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_enter_sends_only_from_a_focused_url_editor_with_a_ready_request() {
+        use keyboard::{Modifiers, key};
+        use text_editor::{Binding, KeyPress, Status};
+
+        let enter = KeyPress {
+            key: keyboard::Key::Named(key::Named::Enter),
+            modified_key: keyboard::Key::Named(key::Named::Enter),
+            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+            modifiers: Modifiers::default(),
+            text: None,
+            status: Status::Focused { is_hovered: false },
+        };
+        assert!(matches!(
+            url_key_binding(enter.clone(), true),
+            Some(Binding::Custom(Message::Request(RequestMsg::Send)))
+        ));
+        assert!(matches!(
+            url_key_binding(enter.clone(), false),
+            Some(Binding::Enter)
+        ));
+        let unfocused = KeyPress { status: Status::Active, ..enter.clone() };
+        assert!(url_key_binding(unfocused, true).is_none());
+        let command_enter = KeyPress { modifiers: Modifiers::COMMAND, ..enter };
+        assert!(matches!(
+            url_key_binding(command_enter, true),
+            Some(Binding::Enter)
+        ));
+    }
 
     fn env(id: &str, name: &str) -> AppEnvironment {
         AppEnvironment {

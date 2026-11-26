@@ -93,6 +93,7 @@ Ctrl on Linux and Windows, Cmd on macOS. Settings → Shortcuts has the same lis
 | Action | Keys |
 |---|---|
 | Send request | Ctrl/Cmd+Enter |
+| Send request from the URL bar | Enter |
 | New tab, close tab | Ctrl/Cmd+T, Ctrl/Cmd+W |
 | Save request | Ctrl/Cmd+S |
 | Command palette | Ctrl/Cmd+K |

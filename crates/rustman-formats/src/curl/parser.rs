@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 
 use base64::{Engine as _, engine::general_purpose};
+use percent_encoding::percent_decode_str;
 use rustman_core::domain::headers::Headers;
 use rustman_core::text::{head_capped, is_json_document};
 use rustman_core::url::percent_encode;
@@ -35,7 +36,45 @@ pub struct ParsedCurl {
     pub notes: Vec<String>,
 }
 
-/// One `-F` field.
+impl ParsedCurl {
+    /// Decode a form body into editable text fields. Keep raw bodies that
+    /// do not consist of key/value pairs or cannot be represented as UTF-8.
+    pub fn urlencoded_form(&self) -> Option<Vec<CurlForm>> {
+        let content_type = self.header.get("content-type")?;
+        let media_type = content_type.split(';').next()?.trim();
+        if !media_type.eq_ignore_ascii_case("application/x-www-form-urlencoded")
+            || !self.form.is_empty()
+            || self.body_file.is_some()
+        {
+            return None;
+        }
+
+        let decode = |value: &str| {
+            percent_decode_str(&value.replace('+', " "))
+                .decode_utf8()
+                .ok()
+                .map(std::borrow::Cow::into_owned)
+        };
+        let body = self.body.as_deref()?;
+        if is_json_document(body) {
+            return None;
+        }
+        body.split('&')
+            .filter(|pair| !pair.is_empty())
+            .map(|pair| {
+                let (key, value) = pair.split_once('=')?;
+                Some(CurlForm {
+                    key: decode(key)?,
+                    value: decode(value)?,
+                    is_file: false,
+                    content_type: None,
+                })
+            })
+            .collect()
+    }
+}
+
+/// One imported form field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CurlForm {
     pub key: String,

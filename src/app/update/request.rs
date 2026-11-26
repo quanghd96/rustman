@@ -138,7 +138,8 @@ pub(super) fn handle(state: &mut AppState, msg: RequestMsg) -> Task<Message> {
             tab.revealed = true;
             use iced::widget::text_editor::{Action as UrlAction, Edit as UrlEdit};
             match action {
-                // The bar is single-line: Enter never lands.
+                // The URL editor binds plain Enter to Send. Its default
+                // newline action is ignored so the bar stays single-line.
                 UrlAction::Edit(UrlEdit::Enter) => return Task::none(),
                 // Pasted curl/HTTPie commands never enter the widget: they go
                 // straight to import with their newlines intact (the bar
@@ -1062,6 +1063,50 @@ mod import_guard_tests {
     }
 
     #[test]
+    fn copied_curl_imports_urlencoded_body_as_editable_rows() {
+        let cmd = r#"curl --url 'https://api.example.test/profile' \
+  -H 'Content-Type: Application/X-WWW-Form-Urlencoded; charset=UTF-8' \
+  --data-raw 'screen_name=Ng%E1%BB%8Dc+Minh+%F0%9F%8F%A3&tag=first&tag=&a%2Bb=a%26b%3Dc&avatar=https%3A%2F%2Fexample.test%2Fpic.png'"#;
+        let mut tab = RequestTabState::new();
+        let applied = apply_parsed_command(&mut tab, curl::parse(cmd), cmd.len());
+
+        assert!(applied.notes.is_empty());
+        assert!(applied.uploads.is_empty());
+        assert_eq!(tab.method, crate::domain::request::HttpMethod::Post);
+        assert_eq!(tab.body_type, BodyType::UrlEncoded);
+        assert_eq!(tab.active_request_tab, crate::message::RequestTab::Body);
+        assert_eq!(
+            tab.form_fields
+                .iter()
+                .map(|field| (field.key.as_str(), field.value.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("screen_name", "Ngọc Minh 🏣"),
+                ("tag", "first"),
+                ("tag", ""),
+                ("a+b", "a&b=c"),
+                ("avatar", "https://example.test/pic.png"),
+            ]
+        );
+    }
+
+    #[test]
+    fn curl_body_stays_raw_when_it_cannot_be_imported_as_form_rows() {
+        for args in [
+            "-H 'Content-Type: text/plain' --data-raw 'key=value'",
+            "--data-raw 'raw text'",
+            "--data-raw 'legacy=%E9'",
+        ] {
+            let cmd = format!("curl https://api.example.test/profile {args}");
+            let mut tab = RequestTabState::new();
+            apply_parsed_command(&mut tab, curl::parse(&cmd), cmd.len());
+
+            assert_eq!(tab.body_type, BodyType::Text, "{args}");
+            assert!(tab.form_fields.is_empty(), "{args}");
+        }
+    }
+
+    #[test]
     fn short_commands_behave_exactly_as_before() {
         // A normal typed command still imports, including mid-typing states
         // with no URL yet (guard only fires past 4 KB).
@@ -1858,6 +1903,7 @@ fn apply_parsed_command(
     use crate::message::RequestTab;
     use crate::state::tabs::make_code_editor;
 
+    let urlencoded = parsed.urlencoded_form();
     let curl::ParsedCurl {
         method,
         url,
@@ -1919,7 +1965,9 @@ fn apply_parsed_command(
     }
 
     let has_body = body.is_some() || body_file.is_some();
-    if let Some(body) = body {
+    if let Some(body) = body
+        && urlencoded.is_none()
+    {
         let is_json = content_type.as_deref().is_some_and(|ct| ct.contains("json"))
             || rustman_core::text::is_json_document(&body);
         let (body_type, syntax) = if is_json { (BodyType::Json, "json") } else { (BodyType::Text, "txt") };
@@ -1933,15 +1981,18 @@ fn apply_parsed_command(
     }
 
     let mut uploads = Vec::new();
-    if !form.is_empty() {
-        tab.body_type = if multipart {
+    if urlencoded.is_some() || !form.is_empty() {
+        tab.body_type = if urlencoded.is_some() {
+            BodyType::UrlEncoded
+        } else if multipart {
             BodyType::Multipart
         } else {
             BodyType::FormData
         };
         // Fresh rows, fresh ids: any expanded viewers point at dead rows.
         tab.form_viewers.clear();
-        tab.form_fields = form
+        tab.form_fields = urlencoded
+            .unwrap_or(form)
             .into_iter()
             .map(|f| form_field_from_command(f, &mut notes, &mut uploads))
             .collect();

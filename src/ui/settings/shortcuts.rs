@@ -12,8 +12,9 @@ use crate::ui::theme::{CONTROL_LG, TEXT_MD, Tokens};
 use super::rule;
 
 /// What each shortcut does, its keys, and whether they take the platform modifier.
-const SHORTCUTS: [(&str, &str, bool); 13] = [
+const SHORTCUTS: [(&str, &str, bool); 14] = [
     ("Send request", "Enter", true),
+    ("Send request from the URL bar", "Enter", false),
     ("New tab", "T", true),
     ("Close tab", "W", true),
     ("Save request", "S", true),

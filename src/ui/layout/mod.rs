@@ -228,7 +228,17 @@ fn icon_btn(
 fn main_area<'a>(state: &'a AppState, t: &'a Tokens) -> Element<'a, Message> {
     let active_tab = state.tabs.active_tab();
     let active_env = state.environments.iter().find(|e| e.is_active);
-    let url_bar = request::url_bar::view(active_tab, active_env, &state.environments, state.chrome.open_menu, t);
+
+    // App shortcuts belong to the main window while there is no modal.
+    let modal_open = state.modal_open();
+    let url_bar = request::url_bar::view(
+        active_tab,
+        active_env,
+        &state.environments,
+        state.chrome.open_menu,
+        !modal_open,
+        t,
+    );
 
     // Any *currently visible* code editor having focus means Cmd+Z/Cmd+Shift+Z
     // should stay scoped to that editor's own undo/redo, not the app-level
@@ -237,10 +247,6 @@ fn main_area<'a>(state: &'a AppState, t: &'a Tokens) -> Element<'a, Message> {
     // regardless of which tab is showing — a hidden editor's focus flag goes
     // stale and never clears once you've typed in it.
     let editors_focused = state.any_visible_code_editor_focused();
-
-    // App shortcuts belong to the main window, not to whatever modal is on
-    // top of it: Ctrl+Tab must not switch tabs behind an open dialog.
-    let modal_open = state.modal_open();
 
     container(crate::ui::widgets::key_guard::key_guard(
         if state.tabs.shows_start() {
