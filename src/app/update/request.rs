@@ -1091,6 +1091,50 @@ mod import_guard_tests {
     }
 
     #[test]
+    fn copied_browser_multipart_imports_editable_fields() {
+        let cmd = r#"curl --url 'https://api.example.test/order' \
+  -H 'Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryExample' \
+  -H 'Content-Length: 240' \
+  -H 'Accept: */*' \
+  -b 'session=example' \
+  --data-raw $'------WebKitFormBoundaryExample\r\nContent-Disposition: form-data; name="coupon_code"\r\n\r\n\r\n------WebKitFormBoundaryExample\r\nContent-Disposition: form-data; name="fields"\r\n\r\n{}\r\n------WebKitFormBoundaryExample\r\nContent-Disposition: form-data; name="coupon_code"\r\n\r\nexample\r\n------WebKitFormBoundaryExample--\r\n'"#;
+        let mut tab = RequestTabState::new();
+        let applied = apply_parsed_command(&mut tab, curl::parse(cmd), cmd.len());
+
+        assert!(applied.notes.is_empty());
+        assert!(applied.uploads.is_empty());
+        assert_eq!(tab.method, crate::domain::request::HttpMethod::Post);
+        assert_eq!(tab.body_type, BodyType::Multipart);
+        assert_eq!(tab.active_request_tab, crate::message::RequestTab::Body);
+        assert_eq!(tab.cookie_string, "session=example");
+        assert_eq!(tab.headers.len(), 1);
+        assert_eq!(tab.headers[0].key, "Accept");
+        assert_eq!(
+            tab.form_fields
+                .iter()
+                .map(|field| (field.key.as_str(), field.value.as_str()))
+                .collect::<Vec<_>>(),
+            [("coupon_code", ""), ("fields", "{}"), ("coupon_code", "example")]
+        );
+    }
+
+    #[test]
+    fn multipart_with_extra_part_headers_keeps_the_original_bytes() {
+        let cmd = r#"curl 'https://api.example.test/upload' -H 'Content-Type: multipart/form-data; boundary=example' --data-raw $'--example\r\nContent-Disposition: form-data; name="attachment"; filename="sample.txt"\r\nContent-Type: text/plain\r\n\r\nhello\r\n--example--\r\n'"#;
+        let parsed = curl::parse(cmd);
+        let original = parsed.body.clone().unwrap();
+        let mut tab = RequestTabState::new();
+        let applied = apply_parsed_command(&mut tab, parsed, cmd.len());
+
+        assert_eq!(tab.body_type, BodyType::Binary);
+        assert_eq!(tab.headers[0].value, "multipart/form-data; boundary=example");
+        assert_eq!(applied.notes.len(), 1);
+        assert!(applied.uploads.is_empty());
+        let encoded = tab.binary_file.as_ref().unwrap().data.as_deref().unwrap();
+        assert_eq!(base64::engine::general_purpose::STANDARD.decode(encoded).unwrap(), original.as_bytes());
+    }
+
+    #[test]
     fn curl_body_stays_raw_when_it_cannot_be_imported_as_form_rows() {
         for args in [
             "-H 'Content-Type: text/plain' --data-raw 'key=value'",
@@ -1903,7 +1947,13 @@ fn apply_parsed_command(
     use crate::message::RequestTab;
     use crate::state::tabs::make_code_editor;
 
-    let urlencoded = parsed.urlencoded_form();
+    let raw_multipart = parsed.raw_multipart();
+    let preserve_raw_multipart = matches!(raw_multipart, Some(curl::RawMultipart::PreserveBytes));
+    let decoded_form = match raw_multipart {
+        Some(curl::RawMultipart::Fields(fields)) => Some((BodyType::Multipart, fields)),
+        Some(curl::RawMultipart::PreserveBytes) => None,
+        None => parsed.urlencoded_form().map(|fields| (BodyType::UrlEncoded, fields)),
+    };
     let curl::ParsedCurl {
         method,
         url,
@@ -1951,6 +2001,15 @@ fn apply_parsed_command(
 
     let has_auth = apply_auth(tab, &mut headers, &cookies);
 
+    if matches!(decoded_form, Some((BodyType::Multipart, _))) {
+        // The generated form gets its own boundary and content length.
+        for name in ["content-type", "content-length"] {
+            while headers.remove(name).is_some() {}
+        }
+        // The decoded form always replaces the command's header rows,
+        // including when the two generated headers were the only ones.
+        tab.headers.clear();
+    }
     let content_type = headers.get("content-type").map(str::to_ascii_lowercase);
     if !headers.is_empty() {
         tab.headers = headers
@@ -1966,13 +2025,23 @@ fn apply_parsed_command(
 
     let has_body = body.is_some() || body_file.is_some();
     if let Some(body) = body
-        && urlencoded.is_none()
+        && decoded_form.is_none()
     {
-        let is_json = content_type.as_deref().is_some_and(|ct| ct.contains("json"))
-            || rustman_core::text::is_json_document(&body);
-        let (body_type, syntax) = if is_json { (BodyType::Json, "json") } else { (BodyType::Text, "txt") };
-        tab.body_type = body_type;
-        tab.body_editor = make_code_editor(&body, syntax);
+        if preserve_raw_multipart {
+            tab.body_type = BodyType::Binary;
+            tab.binary_file = Some(BinaryFile {
+                name: "multipart-body.bin".to_owned(),
+                data: Some(base64::engine::general_purpose::STANDARD.encode(body.as_bytes()).into()),
+            });
+            tab.binary_file_pick = None;
+            notes.push("Multipart fields could not be decoded as text. The body was imported as raw bytes.".to_owned());
+        } else {
+            let is_json = content_type.as_deref().is_some_and(|ct| ct.contains("json"))
+                || rustman_core::text::is_json_document(&body);
+            let (body_type, syntax) = if is_json { (BodyType::Json, "json") } else { (BodyType::Text, "txt") };
+            tab.body_type = body_type;
+            tab.body_editor = make_code_editor(&body, syntax);
+        }
     }
     if let Some(name) = body_file {
         tab.body_type = BodyType::Binary;
@@ -1981,18 +2050,14 @@ fn apply_parsed_command(
     }
 
     let mut uploads = Vec::new();
-    if urlencoded.is_some() || !form.is_empty() {
-        tab.body_type = if urlencoded.is_some() {
-            BodyType::UrlEncoded
-        } else if multipart {
-            BodyType::Multipart
-        } else {
-            BodyType::FormData
-        };
+    let fields = decoded_form.or_else(|| {
+        (!form.is_empty()).then_some((if multipart { BodyType::Multipart } else { BodyType::FormData }, form))
+    });
+    if let Some((body_type, fields)) = fields {
+        tab.body_type = body_type;
         // Fresh rows, fresh ids: any expanded viewers point at dead rows.
         tab.form_viewers.clear();
-        tab.form_fields = urlencoded
-            .unwrap_or(form)
+        tab.form_fields = fields
             .into_iter()
             .map(|f| form_field_from_command(f, &mut notes, &mut uploads))
             .collect();

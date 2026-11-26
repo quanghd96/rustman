@@ -6,11 +6,13 @@
 //! options into a request. [`generator`] goes the other way.
 
 mod generator;
+mod multipart;
 mod options;
 mod parser;
 mod shell;
 
 pub use generator::export;
+pub use multipart::RawMultipart;
 pub use parser::{CurlForm, ParsedCurl, parse};
 pub use rustman_core::domain::headers::Headers;
 
