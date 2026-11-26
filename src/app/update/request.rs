@@ -62,7 +62,7 @@ fn sync_url_to_params(tab: &mut RequestTabState) {
 /// A batch containing unsaved edits is confirmed as a whole, so cancel
 /// leaves every target tab open.
 fn request_close(state: &mut AppState, targets: impl Fn(usize, &RequestTabState) -> bool) {
-    if !state.close_confirm_tabs.is_empty() {
+    if state.tab_close_confirmation.is_some() {
         return;
     }
     state.chrome.open_menu = None;
@@ -78,8 +78,11 @@ fn request_close(state: &mut AppState, targets: impl Fn(usize, &RequestTabState)
             tab.id.clone()
         })
         .collect();
-    if has_edits {
-        state.close_confirm_tabs = ids;
+    if has_edits && !state.skip_tab_close_confirmation {
+        state.tab_close_confirmation = Some(crate::app::TabCloseConfirmation {
+            tabs: ids,
+            remember: false,
+        });
     } else {
         for id in ids {
             state.tabs.close(&id);
@@ -297,12 +300,20 @@ pub(super) fn handle(state: &mut AppState, msg: RequestMsg) -> Task<Message> {
             let active = state.tabs.active;
             request_close(state, |index, _| index == active);
         }
-        RequestMsg::ConfirmCloseTab => {
-            for id in std::mem::take(&mut state.close_confirm_tabs) {
-                state.tabs.close(&id);
+        RequestMsg::RememberTabCloseChoice(remember) => {
+            if let Some(confirmation) = &mut state.tab_close_confirmation {
+                confirmation.remember = remember;
             }
         }
-        RequestMsg::CancelCloseTab => state.close_confirm_tabs.clear(),
+        RequestMsg::ConfirmCloseTab => {
+            if let Some(confirmation) = state.tab_close_confirmation.take() {
+                state.skip_tab_close_confirmation |= confirmation.remember;
+                for id in confirmation.tabs {
+                    state.tabs.close(&id);
+                }
+            }
+        }
+        RequestMsg::CancelCloseTab => state.tab_close_confirmation = None,
         RequestMsg::SwitchTab(i) => {
             state.chrome.open_menu = None;
             state.tabs.switch_to(i);
@@ -2261,7 +2272,10 @@ mod close_tab_tests {
         let dir = TempDir::new("close-confirm");
         let (mut state, before) = three_tabs(&dir);
         let _ = handle(&mut state, RequestMsg::CloseTab(before[2].clone()));
-        assert_eq!(state.close_confirm_tabs.as_slice(), &before[2..3]);
+        assert_eq!(
+            state.tab_close_confirmation.as_ref().unwrap().tabs.as_slice(),
+            &before[2..3]
+        );
         assert!(state.modal_open(), "the question is a modal: app keys stop");
         state.tabs.switch_to(0);
         let _ = handle(&mut state, RequestMsg::CloseCurrentTab);
@@ -2272,6 +2286,54 @@ mod close_tab_tests {
         assert_eq!(state.tabs.active_tab().id, before[0]);
         let _ = handle(&mut state, RequestMsg::ConfirmCloseTab);
         assert_eq!(ids(&state), before[..2], "a second confirm has nothing to close");
+    }
+
+    #[test]
+    fn cancelling_the_dialog_does_not_remember_its_choice() {
+        let dir = TempDir::new("close-cancel-remember");
+        let (mut state, before) = three_tabs(&dir);
+        let _ = handle(&mut state, RequestMsg::CloseTab(before[2].clone()));
+        let _ = handle(&mut state, RequestMsg::RememberTabCloseChoice(true));
+        let _ = handle(&mut state, RequestMsg::CancelCloseTab);
+
+        assert_eq!(ids(&state), before);
+        assert!(!state.skip_tab_close_confirmation);
+        let _ = handle(&mut state, RequestMsg::CloseTab(before[2].clone()));
+        assert!(!state.tab_close_confirmation.as_ref().unwrap().remember);
+    }
+
+    #[test]
+    fn remembering_discard_survives_restart_and_can_be_reenabled_in_settings() {
+        use crate::message::SettingsMsg;
+
+        let dir = TempDir::new("close-remember");
+        let (mut state, before) = three_tabs(&dir);
+        for message in [
+            RequestMsg::CloseTab(before[2].clone()),
+            RequestMsg::RememberTabCloseChoice(true),
+            RequestMsg::ConfirmCloseTab,
+        ] {
+            let _ = crate::app::update::update(&mut state, Message::Request(message));
+        }
+        assert_eq!(ids(&state), before[..2]);
+        assert!(state.skip_tab_close_confirmation);
+        crate::app::session::save_before_exit(&mut state);
+        drop(state);
+
+        let mut state = crate::app::scratch_state(dir.path().to_path_buf());
+        assert!(state.skip_tab_close_confirmation);
+        state.tabs.active_tab_mut().modified = true;
+        let _ = handle(&mut state, RequestMsg::CloseAllTabs);
+        assert!(state.tab_close_confirmation.is_none());
+        assert!(state.tabs.shows_start());
+
+        let _ = crate::app::update::update(
+            &mut state,
+            Message::Settings(SettingsMsg::ConfirmTabCloseToggled),
+        );
+        state.tabs.active_tab_mut().modified = true;
+        let _ = handle(&mut state, RequestMsg::CloseCurrentTab);
+        assert!(state.tab_close_confirmation.is_some());
     }
 
     #[test]

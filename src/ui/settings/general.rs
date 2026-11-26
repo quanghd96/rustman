@@ -50,6 +50,16 @@ pub fn view<'a>(state: &'a AppState, t: &'static Tokens) -> Element<'a, Message>
                     },
                     container(timeout).height(CONTROL_MD).center_y(CONTROL_MD),
                 ),
+                setting_row(
+                    t,
+                    "Confirm before closing unsaved tabs",
+                    "Ask before closing a tab and discarding its unsaved edits.",
+                    switch(
+                        t,
+                        !state.skip_tab_close_confirmation,
+                        Message::Settings(SettingsMsg::ConfirmTabCloseToggled),
+                    ),
+                ),
             ],
         ),
         section(

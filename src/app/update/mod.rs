@@ -120,6 +120,7 @@ pub(crate) fn marks_session_dirty(message: &Message) -> bool {
                 | crate::message::RequestMsg::CloseImportDialog
                 | crate::message::RequestMsg::ImportFromClipboard
                 | crate::message::RequestMsg::ImportFromFile
+                | crate::message::RequestMsg::RememberTabCloseChoice(_)
         )
         // Saving or opening a response body only writes a file and a
         // transient status line; nothing in the persisted session snapshot

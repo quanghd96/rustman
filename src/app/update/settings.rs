@@ -24,6 +24,9 @@ pub(super) fn handle(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.default_timeout_ms = v.trim().parse().unwrap_or(0);
             state.default_timeout_text = v;
         }
+        SettingsMsg::ConfirmTabCloseToggled => {
+            state.skip_tab_close_confirmation = !state.skip_tab_close_confirmation;
+        }
         SettingsMsg::GlobalPreRequestScriptEdited(action) => state.global_pre_request_editor.perform(action),
         SettingsMsg::GlobalTestScriptEdited(action) => state.global_test_editor.perform(action),
         SettingsMsg::TlsOptionToggled(option) => toggle_tls(state, option),

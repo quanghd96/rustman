@@ -243,6 +243,7 @@ pub enum RequestMsg {
     /// close lands.
     CloseTab(String),
     CloseCurrentTab,
+    RememberTabCloseChoice(bool),
     ConfirmCloseTab,
     CancelCloseTab,
     SwitchTab(usize),
@@ -551,6 +552,7 @@ pub enum SettingsMsg {
     LayoutDirectionToggled,
     ZoomSelected(f64),
     DefaultTimeoutChanged(String),
+    ConfirmTabCloseToggled,
     GlobalPreRequestScriptEdited(iced::widget::text_editor::Action),
     GlobalTestScriptEdited(iced::widget::text_editor::Action),
     /// Toggle one of the TLS/connection workarounds (issue #40).

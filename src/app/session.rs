@@ -64,6 +64,7 @@ pub(crate) fn session_from_state(state: &AppState) -> AppSession {
         request_height: state.window_prefs.request_height,
         ui_scale: state.ui_scale,
         default_timeout_ms: state.default_timeout_ms,
+        skip_tab_close_confirmation: state.skip_tab_close_confirmation,
         global_pre_request_script: state.global_pre_request_editor.text(),
         global_test_script: state.global_test_editor.text(),
         tls_accept_invalid_certs: state.tls_options.accept_invalid_certs,
@@ -106,6 +107,7 @@ pub(crate) fn restore_settings(state: &mut AppState, sess: &AppSession) {
         crate::state::session::default_ui_scale()
     };
     state.default_timeout_ms = sess.default_timeout_ms;
+    state.skip_tab_close_confirmation = sess.skip_tab_close_confirmation;
     state.default_timeout_text = sess.default_timeout_ms.to_string();
     state.global_pre_request_editor =
         iced::widget::text_editor::Content::with_text(&sess.global_pre_request_script);

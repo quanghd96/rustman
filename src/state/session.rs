@@ -51,6 +51,8 @@ pub struct AppSession {
     pub ui_scale: f64,
     #[serde(default = "default_timeout_ms")]
     pub default_timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_tab_close_confirmation: bool,
     #[serde(default)]
     pub global_pre_request_script: String,
     #[serde(default)]
@@ -136,6 +138,7 @@ mod tests {
     fn sessions_from_before_the_layout_settings_get_defaults() {
         let session: AppSession = serde_json::from_str(r#"{"tabs": []}"#).unwrap();
         assert!(!session.horizontal_layout);
+        assert!(!session.skip_tab_close_confirmation);
         assert_eq!(session.panel_split, 50);
         assert_eq!(session.ui_scale, 1.0);
         assert_eq!(session.sidebar_width, 200.0);

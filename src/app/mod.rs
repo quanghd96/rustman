@@ -49,6 +49,12 @@ pub struct StripScroll {
     pub content: f32,
 }
 
+/// The tabs named in the current discard dialog and its unchecked-by-default option.
+pub struct TabCloseConfirmation {
+    pub tabs: Vec<String>,
+    pub remember: bool,
+}
+
 /// Window and layout preferences kept in the session.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowPrefs {
@@ -99,8 +105,8 @@ pub struct AppState {
     /// Why the database couldn't be opened. The app then runs on memory
     /// alone, and the status bar says so for as long as it runs.
     pub storage_error: Option<String>,
-    /// The modified tab waiting on the discard confirmation, by id.
-    pub close_confirm_tabs: Vec<String>,
+    pub tab_close_confirmation: Option<TabCloseConfirmation>,
+    pub skip_tab_close_confirmation: bool,
     pub spinner_frame: u32,
     pub palette_open: bool,
     pub palette_query: String,
@@ -197,7 +203,7 @@ impl AppState {
     /// keyboard.
     pub(crate) fn modal_open(&self) -> bool {
         self.palette_open
-            || !self.close_confirm_tabs.is_empty()
+            || self.tab_close_confirmation.is_some()
             || self.export_dialog_collection.is_some()
             || self.save_dialog.is_some()
             || self.sidebar.folder_dialog.is_some()

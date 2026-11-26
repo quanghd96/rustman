@@ -1,10 +1,10 @@
 //! The app's dialogs on one raised shell: title row, body, right-aligned
 //! footer. Esc and a click on the scrim dismiss them.
 
-use iced::widget::{Space, Text, column, container, row, text};
+use iced::widget::{Space, Text, checkbox, column, container, row, text};
 use iced::{Alignment, Background, Border, Element, Length, Padding};
 
-use crate::app::AppState;
+use crate::app::{AppState, TabCloseConfirmation};
 use crate::message::{ClashChoice, ImportMsg, Message, RequestMsg, SidebarMsg};
 use crate::state::sidebar::Clash;
 use crate::ui::components::Surface;
@@ -238,20 +238,24 @@ fn option<'a>(
         .into()
 }
 
-pub(super) fn close_confirm_dialog(state: &AppState) -> Element<'_, Message> {
-    let t = state.tokens();
+pub(super) fn close_confirm_dialog<'a>(
+    t: &'a Tokens,
+    confirmation: &TabCloseConfirmation,
+) -> Element<'a, Message> {
+    let detail = if confirmation.tabs.len() == 1 {
+        "This tab has edits that haven't been saved. Closing it loses them."
+    } else {
+        "Some of these tabs have unsaved edits. Closing the tabs discards those edits."
+    };
+    let remember = checkbox(confirmation.remember)
+        .label("Don't ask again")
+        .text_size(TEXT_MD)
+        .on_toggle(|remember| Message::Request(RequestMsg::RememberTabCloseChoice(remember)));
     Dialog {
         width: NARROW,
         title: title(t, "Discard unsaved changes?"),
         subtitle: None,
-        body: paragraph(
-            t,
-            if state.close_confirm_tabs.len() == 1 {
-                "This tab has edits that haven't been saved. Closing it loses them."
-            } else {
-                "Some of these tabs have unsaved edits. Closing the tabs discards those edits."
-            },
-        ),
+        body: column![paragraph(t, detail), remember].spacing(SPACE_MD).into(),
         footer: vec![
             cancel(t, "Cancel", Message::Request(RequestMsg::CancelCloseTab)),
             danger(t, "Discard changes", Message::Request(RequestMsg::ConfirmCloseTab)),

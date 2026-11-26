@@ -234,8 +234,22 @@ fn starting_another_rename_stores_the_one_in_progress() {
     assert_eq!(stored_name(&state, "a", "r1"), "First");
 }
 
-/// Enter is the only way a rename finishes, so a name typed and left open
-/// is still on screen when the window closes.
+#[test]
+fn finishing_the_inline_rename_persists_the_duplicate_name() {
+    let (mut state, _dir) = app();
+    send(&mut state, side(SidebarMsg::CloneRequest { id: "r1".into(), collection_id: "a".into() }));
+    let copy_id = active_request(&state).unwrap().to_owned();
+    assert_eq!(stored_name(&state, "a", &copy_id), "r1 copy");
+
+    send(&mut state, side(SidebarMsg::RenameEdited("Request copy".into())));
+    assert_eq!(stored_name(&state, "a", &copy_id), "r1 copy");
+    send(&mut state, side(SidebarMsg::RenameFinished));
+    assert!(state.sidebar.renaming.is_none());
+    assert_eq!(stored_name(&state, "a", &copy_id), "Request copy");
+    assert_eq!(state.tabs.active_tab().title, "Request copy");
+}
+
+/// Closing the window saves even when the inline editor is still open.
 #[test]
 fn closing_the_window_stores_a_rename_left_open() {
     let (mut state, _dir) = app();

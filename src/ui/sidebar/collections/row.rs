@@ -194,19 +194,27 @@ pub fn label_budget(row: &Row, width: f32) -> f32 {
 }
 
 fn lead_width(row: &Row) -> f32 {
-    match row.kind {
-        RowKind::Request { .. } => *METHOD_COLUMN,
+    match &row.kind {
+        RowKind::Request { method, .. } => {
+            let width: f32 = method.as_str().chars().map(|c| Face::Mono.advance(c, TEXT_CAPTION)).sum();
+            width.ceil() + SPACE_MD
+        }
         _ => INDENT,
     }
 }
 
 fn body(t: &'static Tokens, line: &Line) -> Element<'static, Message> {
-    let lead: Element<'static, Message> = match &line.row.kind {
+    let label = line.label.view(line.fitted.as_deref(), t.text, t);
+    row![lead(t, &line.row), label].align_y(Alignment::Center).into()
+}
+
+fn lead(t: &'static Tokens, row: &Row) -> Element<'static, Message> {
+    match &row.kind {
         RowKind::Request { method, .. } => text(method.as_str())
             .size(TEXT_CAPTION)
             .font(MONO)
             .color(t.method_color(method.as_str()))
-            .width(*METHOD_COLUMN)
+            .width(lead_width(row))
             .into(),
         RowKind::Collection { expanded } | RowKind::Folder { expanded } => {
             let chevron = if *expanded { icons::chevron_down() } else { icons::chevron_right() };
@@ -219,9 +227,7 @@ fn body(t: &'static Tokens, line: &Line) -> Element<'static, Message> {
             .into()
         }
         RowKind::Empty { .. } => Space::new().into(),
-    };
-    let label = line.label.view(line.fitted.as_deref(), t.text, t);
-    row![lead, label].align_y(Alignment::Center).into()
+    }
 }
 
 fn actions_button(t: &'static Tokens, id: String, open: bool) -> Element<'static, Message> {
@@ -249,7 +255,7 @@ fn rename_row(cx: &Context<'_>, row: &Row) -> Element<'static, Message> {
         .size(TEXT_MD)
         .padding([2.0, SPACE_XS + 2.0])
         .style(move |_, status| field::field(t, status));
-    container(input)
+    container(row![lead(t, row), input].align_y(Alignment::Center))
         .padding(Padding {
             left: indent,
             right: SPACE_MD,

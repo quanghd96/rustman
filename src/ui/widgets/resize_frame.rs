@@ -2,7 +2,8 @@
 //! shows the resize cursor and starts a native resize drag. It takes no
 //! layout space; presses inside the band never reach the content.
 
-use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::widget::{Id, Operation, Tree};
+use iced::advanced::widget::operation::{Scrollable, TextInput};
 use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer};
 use iced::window::Direction;
 use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
@@ -45,11 +46,13 @@ pub fn resize_frame<'a, M: Clone + 'a>(
     content: impl Into<Element<'a, M>>,
     enabled: bool,
     on_resize: fn(Direction) -> M,
+    outside_press: Option<(Id, M)>,
 ) -> Element<'a, M> {
     Element::new(ResizeFrame {
         content: content.into(),
         enabled,
         on_resize,
+        outside_press,
     })
 }
 
@@ -57,6 +60,47 @@ struct ResizeFrame<'a, M> {
     content: Element<'a, M>,
     enabled: bool,
     on_resize: fn(Direction) -> M,
+    outside_press: Option<(Id, M)>,
+}
+
+/// Checks whether a press hit the named input, including inside a scrolled tree.
+struct InputHit<'a> {
+    id: &'a Id,
+    point: Point,
+    next_scroll: Option<(Rectangle, Vector)>,
+    hit: bool,
+}
+
+impl Operation for InputHit<'_> {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        if self.hit {
+            return;
+        }
+        let original = self.point;
+        if let Some((bounds, translation)) = self.next_scroll.take() {
+            if !bounds.contains(original) {
+                return;
+            }
+            self.point = original + translation;
+        }
+        operate(self);
+        self.point = original;
+    }
+
+    fn scrollable(
+        &mut self,
+        _: Option<&Id>,
+        bounds: Rectangle,
+        _: Rectangle,
+        translation: Vector,
+        _: &mut dyn Scrollable,
+    ) {
+        self.next_scroll = Some((bounds, translation));
+    }
+
+    fn text_input(&mut self, id: Option<&Id>, bounds: Rectangle, _: &mut dyn TextInput) {
+        self.hit |= id == Some(self.id) && bounds.contains(self.point);
+    }
 }
 
 impl<M> ResizeFrame<'_, M> {
@@ -104,6 +148,24 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for ResizeFrame<'_, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
+        if let Some((id, message)) = &self.outside_press
+            && let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left | mouse::Button::Right)) = event
+            && let Some(point) = cursor.position()
+        {
+            let mut probe = InputHit {
+                id,
+                point,
+                next_scroll: None,
+                hit: false,
+            };
+            self.content
+                .as_widget_mut()
+                .operate(&mut tree.children[0], layout, renderer, &mut probe);
+            if !probe.hit {
+                // Finish before the clicked control runs, without taking its click.
+                shell.publish(message.clone());
+            }
+        }
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event
             && let Some(direction) = self.edge(layout, cursor)
         {
@@ -195,5 +257,30 @@ mod tests {
         assert_eq!(cursor(Direction::NorthEast), mouse::Interaction::ResizingDiagonallyUp);
         assert_eq!(cursor(Direction::SouthEast), mouse::Interaction::ResizingDiagonallyDown);
         assert_eq!(cursor(Direction::West), mouse::Interaction::ResizingHorizontally);
+    }
+
+    #[test]
+    fn click_away_checks_the_visible_position_of_the_rename_input() {
+        type Paragraph = <iced::Renderer as iced::advanced::text::Renderer>::Paragraph;
+        let id = Id::new("rename");
+        let mut input = iced::widget::text_input::State::<Paragraph>::new();
+        let tree_viewport = Rectangle::new(Point::new(0.0, 80.0), Size::new(260.0, 220.0));
+        let input_bounds = Rectangle::new(Point::new(80.0, 240.0), Size::new(150.0, 24.0));
+        for (point, hit) in [
+            (Point::new(90.0, 146.0), true),
+            (Point::new(90.0, 246.0), false),
+            (Point::new(480.0, 146.0), false),
+        ] {
+            let mut probe = InputHit {
+                id: &id,
+                point,
+                next_scroll: Some((tree_viewport, Vector::new(0.0, 100.0))),
+                hit: false,
+            };
+            probe.traverse(&mut |operation| {
+                operation.text_input(Some(&id), input_bounds, &mut input);
+            });
+            assert_eq!(probe.hit, hit);
+        }
     }
 }

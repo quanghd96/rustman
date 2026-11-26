@@ -40,16 +40,22 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         frame = frame.push(title_bar::view(state, t));
     }
     frame = frame.push(body).push(hairline(t)).push(status_bar::status_bar(state, t));
+    let finish_rename_on_click = state.sidebar.renaming.as_ref().and_then(|rename| {
+        matches!(rename.target, crate::state::sidebar::RenameTarget::Request { .. }).then(|| {
+            (crate::state::sidebar::rename_input_id(), Message::Sidebar(SidebarMsg::RenameFinished))
+        })
+    });
     let root = crate::ui::widgets::resize_frame::resize_frame(
         frame,
         custom_frame && !state.chrome.maximized,
         |direction| Message::Window(WindowMsg::DragResize(direction)),
+        finish_rename_on_click,
     );
 
     let modal = if state.palette_open {
         crate::ui::command_palette::view(state)
-    } else if !state.close_confirm_tabs.is_empty() {
-        dialogs::close_confirm_dialog(state)
+    } else if let Some(confirmation) = &state.tab_close_confirmation {
+        dialogs::close_confirm_dialog(t, confirmation)
     } else if state.export_dialog_collection.is_some() {
         dialogs::export_dialog(state)
     } else if state.sidebar.import_clash.is_some() {
