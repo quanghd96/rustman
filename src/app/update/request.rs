@@ -1495,9 +1495,10 @@ mod command_import_tests {
     #[test]
     fn a_background_parse_checkpoints_its_own_tab() {
         let (_dir, mut state) = app();
+        let cmd = "curl https://x.io";
+        let _ = import_pasted_text(&mut state, cmd.to_owned());
         let background = state.tabs.active_tab().id.clone();
         state.tabs.new_tab();
-        let cmd = "curl https://x.io";
         let _ = handle(
             &mut state,
             RequestMsg::ImportCommandParsed { tab_id: background.clone(), parsed: curl::parse(cmd), cmd_len: cmd.len() },
@@ -1768,6 +1769,7 @@ fn import_command(
 ) -> Task<Message> {
     let tab = state.tabs.active_tab_mut();
     if cmd.len() > ASYNC_IMPORT_LEN {
+        tab.revealed = true;
         let tab_id = tab.id.clone();
         state.status_message = Some(format!("Parsing {} command…", human_size(cmd.len())));
         state.importing = true;
@@ -1832,6 +1834,7 @@ fn import_pasted_text(state: &mut AppState, text: String) -> Task<Message> {
         }
     };
     state.status_message = Some(format!("Parsing {} command…", human_size(text.len())));
+    state.tabs.reveal_active();
     parse_command_off_thread(state.tabs.active_tab().id.clone(), text, parse)
 }
 
@@ -2241,6 +2244,7 @@ mod close_tab_tests {
     /// Tabs A, B and a modified C.
     fn three_tabs(dir: &TempDir) -> (AppState, Vec<String>) {
         let mut state = crate::app::scratch_state(dir.path().to_path_buf());
+        state.tabs.new_tab();
         state.tabs.new_tab();
         state.tabs.new_tab();
         state.tabs.tabs[2].modified = true;

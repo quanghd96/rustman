@@ -413,6 +413,7 @@ mod autosave_bench {
         let dir = TempDir::new("autosave-bench");
         let mut state = crate::app::boot::load(dir.path().to_path_buf());
         state.tabs.active_tab_mut().reset_body_editor(&"x".repeat(5_000_000));
+        state.tabs.reveal_active();
         state.tabs.new_tab();
 
         let (mut ui, mut written) = (std::time::Duration::ZERO, std::time::Duration::ZERO);

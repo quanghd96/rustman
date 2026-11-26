@@ -142,6 +142,7 @@ pub fn full_tab() -> TabSnapshot {
         saved_as: Some((COLLECTION_ID.into(), r.id)),
         active_request_tab: RequestTab::Scripts,
         active_response_tab: ResponseTab::Tests,
+        revealed: false,
     }
 }
 
@@ -176,6 +177,7 @@ pub fn scratch_tab() -> TabSnapshot {
         saved_as: None,
         active_request_tab: RequestTab::default(),
         active_response_tab: ResponseTab::default(),
+        revealed: false,
     }
 }
 

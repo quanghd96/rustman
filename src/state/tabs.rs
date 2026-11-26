@@ -389,6 +389,10 @@ impl RequestTabState {
         self.saved_as.is_none() && self.url.trim().is_empty() && !self.modified && self.response.is_none()
     }
 
+    fn is_start_tab(&self) -> bool {
+        !self.revealed && self.is_pristine()
+    }
+
     /// Show `resp` and derive what the header and failure card say.
     pub fn set_response(&mut self, resp: HttpResponse, timeout_ms: u64) {
         let elapsed = self.sent.as_ref().map_or_else(Default::default, |s| s.started.elapsed());
@@ -852,6 +856,7 @@ impl RequestTabState {
     pub fn from_snapshot(snap: TabSnapshot) -> Self {
         let (url, params) = crate::domain::request::reconcile_url_params(&snap.url, &snap.params);
         let body_syntax = body_syntax_for(&snap.body_type, &snap.body);
+        let revealed = snap.revealed || snap.has_request_content();
         Self {
             id: snap.id,
             title: snap.title,
@@ -876,6 +881,7 @@ impl RequestTabState {
             saved_as: snap.saved_as,
             active_request_tab: snap.active_request_tab,
             active_response_tab: snap.active_response_tab,
+            revealed,
             ..Self::from_parts(EditorText {
                 url,
                 body: &snap.body,
@@ -1259,8 +1265,13 @@ impl TabManager {
         self.tabs.iter_mut().find(|t| t.id == id)
     }
 
-    /// A new tab the user asked for, so it is revealed at once.
+    /// Reveal the Start tab or append another explicitly requested tab.
     pub fn new_tab(&mut self) {
+        if self.shows_start() {
+            self.reveal_active();
+            return;
+        }
+        self.tabs.retain(|tab| !tab.is_start_tab());
         let mut tab = RequestTabState::new();
         tab.revealed = true;
         self.tabs.push(tab);
@@ -1270,7 +1281,7 @@ impl TabManager {
     /// The workspace is a single untouched tab: show the Start card in
     /// place of the tab chip, the URL row and the panes.
     pub fn shows_start(&self) -> bool {
-        matches!(self.tabs.as_slice(), [tab] if tab.is_pristine() && !tab.revealed)
+        matches!(self.tabs.as_slice(), [tab] if tab.is_start_tab())
     }
 
     /// Mark the active tab as worked with.
@@ -1322,6 +1333,9 @@ impl TabManager {
     }
 
     pub fn open_request(&mut self, req: &SavedRequest) {
+        // The Start card needs a backing tab, but it should disappear when
+        // a saved request opens. This also clears one left by an old session.
+        self.tabs.retain(|tab| !tab.is_start_tab());
         let req_id = &req.id;
         if let Some(idx) = self
             .tabs
@@ -1377,6 +1391,42 @@ pub struct TabSnapshot {
     pub active_request_tab: crate::message::RequestTab,
     #[serde(default)]
     pub active_response_tab: crate::message::ResponseTab,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub revealed: bool,
+}
+
+impl TabSnapshot {
+    // Older sessions didn't record `revealed`. Even without a URL, a tab
+    // that contains a draft must be kept when opening a saved request.
+    fn has_request_content(&self) -> bool {
+        self.saved_as.is_some()
+            || self.title != "New Request"
+            || self.method != HttpMethod::Get
+            || !self.url.is_empty()
+            || !self.headers.is_empty()
+            || !self.params.is_empty()
+            || self.body_type != BodyType::None
+            || !self.body.is_empty()
+            || !self.graphql_variables.is_empty()
+            || !self.form_fields.is_empty()
+            || self.binary_file.is_some()
+            || self.auth_type != AuthType::None
+            || !self.bearer_token.is_empty()
+            || !self.basic_user.is_empty()
+            || !self.basic_pass.is_empty()
+            || !self.api_key_name.is_empty()
+            || !self.api_key_value.is_empty()
+            || self.api_key_location != ApiKeyLocation::Header
+            || !self.cookie_string.is_empty()
+            || !self.cookies.is_empty()
+            || !self.jwt_secret.is_empty()
+            || !self.jwt_subject.is_empty()
+            || self.jwt_algo != "HS256"
+            || !self.pre_request_script.is_empty()
+            || !self.test_script.is_empty()
+            || self.active_request_tab != crate::message::RequestTab::default()
+            || self.active_response_tab != crate::message::ResponseTab::default()
+    }
 }
 
 fn default_jwt_algo() -> String {
@@ -1414,6 +1464,7 @@ impl From<&RequestTabState> for TabSnapshot {
             saved_as: t.saved_as.clone(),
             active_request_tab: t.active_request_tab.clone(),
             active_response_tab: t.active_response_tab.clone(),
+            revealed: t.revealed,
         }
     }
 }
@@ -1741,7 +1792,10 @@ mod start_tests {
         tabs.close_tab(0);
         assert!(tabs.shows_start(), "closing the last tab is a fresh start");
         tabs.new_tab();
-        assert!(!tabs.shows_start(), "two tabs");
+        assert_eq!(tabs.tabs.len(), 1, "the first new request reuses the Start tab");
+        assert!(!tabs.shows_start(), "a requested new tab is revealed");
+        tabs.new_tab();
+        assert_eq!(tabs.tabs.len(), 2, "a second explicit new request adds a tab");
         tabs.close_tab(0);
         assert!(!tabs.shows_start(), "a requested new tab is revealed");
     }
@@ -1767,6 +1821,7 @@ mod start_tests {
         let mut tabs = TabManager::default();
         tabs.new_tab();
         tabs.new_tab();
+        tabs.new_tab();
         let ids: Vec<String> = tabs.tabs.iter().map(|t| t.id.clone()).collect();
         tabs.switch_to(1);
         tabs.close_tab(0);
@@ -1780,11 +1835,70 @@ mod start_tests {
     }
 
     #[test]
-    fn opening_a_request_reveals_its_tab() {
+    fn opening_a_saved_request_replaces_the_start_tab() {
         let mut tabs = TabManager::default();
         let req: SavedRequest = RequestTabState::new().to_request().into();
         tabs.open_request(&req);
         assert!(!tabs.shows_start());
+        assert_eq!(tabs.tabs.len(), 1);
+        assert_eq!(tabs.active_tab().saved_as.as_ref().unwrap().1, req.id);
+    }
+
+    #[test]
+    fn opening_an_existing_request_only_closes_a_leftover_start_tab() {
+        let mut tabs = TabManager::default();
+        let req: SavedRequest = RequestTabState::new().to_request().into();
+        let existing = RequestTabState::from_saved(&req);
+        let existing_id = existing.id.clone();
+        tabs.tabs.push(existing);
+
+        let mut explicit = RequestTabState::new();
+        explicit.revealed = true;
+        let explicit_id = explicit.id.clone();
+        let snapshot = serde_json::to_string(&TabSnapshot::from(&explicit)).unwrap();
+        tabs.tabs.push(RequestTabState::from_snapshot(serde_json::from_str(&snapshot).unwrap()));
+
+        let mut snapshot = TabSnapshot::from(&RequestTabState::new());
+        snapshot.body = "a draft without a URL".into();
+        let draft = RequestTabState::from_snapshot(snapshot);
+        let draft_id = draft.id.clone();
+        tabs.tabs.push(draft);
+
+        tabs.open_request(&req);
+        assert_eq!(tabs.tabs.len(), 3);
+        assert_eq!(tabs.active_tab().id, existing_id);
+        assert_eq!(tabs.tabs[1].id, explicit_id);
+        assert_eq!(tabs.tabs[2].id, draft_id);
+    }
+
+    #[test]
+    fn a_new_request_removes_the_extra_start_tab_from_an_older_session() {
+        let mut tabs = TabManager::default();
+        let old_start = tabs.active_tab().id.clone();
+        let mut explicit = RequestTabState::new();
+        explicit.revealed = true;
+        let explicit_id = explicit.id.clone();
+        tabs.tabs.push(explicit);
+        tabs.active = 1;
+
+        tabs.new_tab();
+        assert_eq!(tabs.tabs.len(), 2);
+        assert_eq!(tabs.tabs[0].id, explicit_id);
+        assert_ne!(tabs.active_tab().id, old_start);
+        assert!(tabs.active_tab().revealed);
+    }
+
+    #[test]
+    fn opening_a_saved_request_keeps_an_edited_tab_without_a_url() {
+        let mut tabs = TabManager::default();
+        let draft = tabs.active_tab().id.clone();
+        tabs.active_tab_mut().modified = true;
+        let req: SavedRequest = RequestTabState::new().to_request().into();
+        tabs.open_request(&req);
+
+        assert_eq!(tabs.tabs.len(), 2);
+        assert_eq!(tabs.tabs[0].id, draft);
+        assert_eq!(tabs.active_tab().saved_as.as_ref().unwrap().1, req.id);
     }
 }
 

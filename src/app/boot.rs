@@ -122,7 +122,14 @@ pub(crate) fn load(data_dir: PathBuf) -> AppState {
     if let Some(sess) = session.as_mut() {
         let restored: Vec<_> = std::mem::take(&mut sess.tabs)
             .into_iter()
-            .map(RequestTabState::from_snapshot)
+            .enumerate()
+            .map(|(index, snapshot)| {
+                let mut tab = RequestTabState::from_snapshot(snapshot);
+                // The backing tab for Start is created at index zero.
+                // Preserve later blank tabs even in older session formats.
+                tab.revealed |= index > 0;
+                tab
+            })
             .collect();
         if !restored.is_empty() {
             let active = sess.active_tab.min(restored.len() - 1);
