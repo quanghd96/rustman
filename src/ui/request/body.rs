@@ -36,9 +36,6 @@ pub fn view(tab: &RequestTabState) -> Element<'_, Message> {
         BodyType::Binary => binary_body_view(tab),
 
         BodyType::GraphQL => {
-            // Postman's layout: query on top, variables underneath. Both panes
-            // are code editors, so both keep their own undo history and the
-            // shared gutter/theme look.
             let query: Element<Message> = tab
                 .body_editor
                 .view()
@@ -48,17 +45,16 @@ pub fn view(tab: &RequestTabState) -> Element<'_, Message> {
                 .view()
                 .map(|m| Message::Request(RequestMsg::GraphQLVariablesEdited(m)));
 
-            column![
-                pane_label("Query"),
-                container(query)
-                    .height(Length::FillPortion(3))
-                    .width(Length::Fill),
-                pane_label("Variables"),
-                container(variables)
-                    .height(Length::FillPortion(2))
-                    .width(Length::Fill),
+            row![
+                column![pane_label("Query"), query]
+                    .width(Length::FillPortion(3))
+                    .height(Length::Fill),
+                crate::ui::components::vhairline(Palette::tokens()),
+                column![pane_label("Variables"), variables]
+                    .width(Length::FillPortion(2))
+                    .height(Length::Fill),
             ]
-            .spacing(0)
+            .width(Length::Fill)
             .height(Length::Fill)
             .into()
         }
