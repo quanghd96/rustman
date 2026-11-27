@@ -6,6 +6,9 @@ use super::collection::SavedRequest;
 use super::request::file_size;
 use crate::time::now_millis;
 
+/// Number of recent requests kept in history.
+pub const HISTORY_LIMIT: usize = 100;
+
 /// Request bodies and form files larger than this many bytes are left out of
 /// history.
 pub const HISTORY_BODY_LIMIT: usize = 10 * 1024 * 1024;
@@ -85,6 +88,11 @@ impl HistoryEntry {
                 bytes: body as u64,
             });
         }
+        self.omit_files_over(limit);
+    }
+
+    /// Drops attachment bytes over the given decoded size, preserving filenames.
+    pub fn omit_files_over(&mut self, limit: usize) {
         if let Some(file) = &mut self.request.binary_file
             && let Some(data) = file.data.take_if(|data| file_size(data) > limit)
         {

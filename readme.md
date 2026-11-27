@@ -82,7 +82,7 @@ Optional background connections include Cloud sync and the update check. **Check
 
 - **Collections.** Folders, drag and drop, and Duplicate from a request's menu. Ctrl/Cmd+S saves a tab to its collection; a new tab asks where. Deleting a collection or folder asks first; deleting a request or an environment shows an Undo toast for 8 seconds. If the database can't be written, the status bar says so and the tab stays marked unsaved.
 - **History.** Each entry records the request as it was sent, and opens as a new draft.
-- **Cloud sync.** Open Settings → Cloud and enter your private S3-compatible endpoint, bucket, signing region, object key and credentials. Connect the same endpoint, bucket and object key on each device. Saving a request or changing a collection syncs in the background. Rustman checks for remote updates when it starts, when the window gains focus, and every 15 seconds while open.
+- **Cloud sync.** Open Settings → Cloud and enter your private S3-compatible endpoint, bucket, signing region, object key and credentials. Connect the same endpoint, bucket and object key on each device. Saving a request or changing a collection syncs the workspace. Sending a request syncs History in the background, keeping the latest 100 entries across devices. Clearing History syncs the deletion. Rustman checks for remote updates when it starts, when the window gains focus, and every 15 seconds while open.
 - The workspace uses one JSON object. Choose a bucket with versioning off to store only the latest snapshot. The endpoint must support conditional writes. On AWS S3, allow object reads and writes and allow listing the bucket so Rustman can detect a missing object.
 - If two devices change the workspace before syncing, Settings → Cloud asks which workspace to keep. Local saves continue offline and sync retries when the connection returns.
 
@@ -158,7 +158,7 @@ The CLI isn't in the release archives yet; build it from source as above.
 A few things are still missing.
 
 - **Environment variables use the active environment only.** There are no collection, global or dynamic (`{{$guid}}`) variables, and substitution is a single pass. A name the environment doesn't define, or any `{{var}}` with no environment active, goes out as written.
-- **Cloud sync covers saved collections, folders and requests.** Environments, history, drafts, global scripts, recognized auth secrets and attachment bytes stay on their device. Request URLs, query params and body text are included in the snapshot.
+- **Cloud sync covers saved collections, folders, requests and History.** History uses a separate object with `.history.json` appended to the configured object key. The credentials need read and write access to both objects. Request URLs, query params and body text are included. Environments, drafts, global scripts, recognized auth secrets, attachment bytes and oversized history bodies stay on their device.
 - **No per-request timeout.** The one timeout in Settings → General applies to every request.
 - **The CLI doesn't save what scripts change.** `set_env` in a `rustman-cli` run lasts for that run only.
 

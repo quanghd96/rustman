@@ -1,22 +1,27 @@
 use std::borrow::Cow;
+use std::collections::HashSet;
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use rustman_core::domain::collection::SavedRequest;
-use rustman_core::domain::history::{HistoryEntry, HistorySummary, OmittedPart};
+use rustman_core::domain::history::{
+    HISTORY_BODY_LIMIT, HISTORY_LIMIT, HistoryEntry, HistorySummary, OmittedPart,
+};
+use rustman_core::time::now_millis;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{DbError, atomically};
 use crate::rows::{decode, readable};
+use crate::session;
 
 /// History keeps this many entries, newest first.
-pub(crate) const KEEP: i64 = 100;
+pub(crate) const KEEP: i64 = HISTORY_LIMIT as i64;
 
 const ENTRY_COLUMNS: &str = "id, timestamp, method, url, status, duration, request_json";
 
 /// The newest entries, at most `limit`. Unreadable rows are skipped.
 pub(crate) fn recent(conn: &Connection, limit: i64) -> Result<Vec<HistoryEntry>, DbError> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT {ENTRY_COLUMNS} FROM history ORDER BY timestamp DESC LIMIT ?1"
+        "SELECT {ENTRY_COLUMNS} FROM history ORDER BY timestamp DESC, id DESC LIMIT ?1"
     ))?;
     let rows = stmt.query_map([limit], entry_row)?;
     Ok(rows
@@ -28,7 +33,7 @@ pub(crate) fn recent(conn: &Connection, limit: i64) -> Result<Vec<HistoryEntry>,
 pub(crate) fn summaries(conn: &Connection, limit: i64) -> Result<Vec<HistorySummary>, DbError> {
     let mut stmt = conn.prepare(
         "SELECT id, timestamp, method, url, status, duration \
-         FROM history ORDER BY timestamp DESC LIMIT ?1",
+         FROM history ORDER BY timestamp DESC, id DESC LIMIT ?1",
     )?;
     let rows = stmt.query_map([limit], |r| {
         Ok(Some(HistorySummary {
@@ -105,6 +110,24 @@ pub(crate) fn add(
     conn: &Connection,
     mut entry: Cow<'_, HistoryEntry>,
     limit: usize,
+    cloud_target: Option<&str>,
+) -> Result<(), DbError> {
+    atomically(conn, || {
+        if let Some(target) = cloud_target
+            && let Some(cutoff) = cleared_at(conn, target)?
+            && entry.timestamp <= cutoff
+        {
+            entry.to_mut().timestamp = cutoff.saturating_add(1);
+        }
+        insert(conn, entry, limit)?;
+        prune(conn)
+    })
+}
+
+fn insert(
+    conn: &Connection,
+    mut entry: Cow<'_, HistoryEntry>,
+    limit: usize,
 ) -> Result<(), DbError> {
     if entry.has_large_parts(limit) {
         entry.to_mut().omit_large_parts(limit);
@@ -113,30 +136,82 @@ pub(crate) fn add(
         request: &entry.request,
         history_omitted: &entry.omitted,
     })?;
+    conn.execute(
+        "INSERT OR REPLACE INTO history (id,timestamp,method,url,status,duration,request_json) \
+         VALUES (?1,?2,?3,?4,?5,?6,?7)",
+        params![
+            entry.id,
+            entry.timestamp,
+            entry.method,
+            entry.url,
+            entry.status,
+            entry.duration_ms,
+            request
+        ],
+    )?;
+    Ok(())
+}
+
+fn prune(conn: &Connection) -> Result<(), DbError> {
+    conn.execute(
+        "DELETE FROM history WHERE id NOT IN \
+         (SELECT id FROM history ORDER BY timestamp DESC, id DESC LIMIT ?1)",
+        [KEEP],
+    )?;
+    Ok(())
+}
+
+fn clear_key(target: &str) -> String {
+    format!("history_cleared_at:{target}")
+}
+
+pub(crate) fn cleared_at(conn: &Connection, target: &str) -> Result<Option<i64>, DbError> {
+    session::load_named(conn, &clear_key(target))
+}
+
+pub(crate) fn merge(
+    conn: &Connection,
+    target: &str,
+    remote_clear: Option<i64>,
+    incoming: &[HistoryEntry],
+) -> Result<(), DbError> {
     atomically(conn, || {
-        conn.execute(
-            "INSERT OR REPLACE INTO history (id,timestamp,method,url,status,duration,request_json) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7)",
-            params![
-                entry.id,
-                entry.timestamp,
-                entry.method,
-                entry.url,
-                entry.status,
-                entry.duration_ms,
-                request
-            ],
-        )?;
-        conn.execute(
-            "DELETE FROM history WHERE id NOT IN \
-             (SELECT id FROM history ORDER BY timestamp DESC LIMIT ?1)",
-            [KEEP],
-        )?;
-        Ok(())
+        let local_clear = cleared_at(conn, target)?;
+        if let Some(cutoff) = remote_clear.filter(|&time| Some(time) > local_clear) {
+            conn.execute("DELETE FROM history WHERE timestamp <= ?1", [cutoff])?;
+            session::save_named(conn, &clear_key(target), &cutoff)?;
+        }
+        let cutoff = local_clear.max(remote_clear);
+        let mut known: HashSet<_> = summaries(conn, KEEP)?
+            .into_iter()
+            .map(|entry| entry.id)
+            .collect();
+        for entry in incoming
+            .iter()
+            .filter(|entry| cutoff.is_none_or(|time| entry.timestamp > time))
+        {
+            if known.insert(entry.id.clone()) {
+                insert(conn, entry.into(), HISTORY_BODY_LIMIT)?;
+            }
+        }
+        prune(conn)
     })
 }
 
 pub(crate) fn clear(conn: &Connection) -> Result<(), DbError> {
     conn.execute("DELETE FROM history", [])?;
     Ok(())
+}
+
+pub(crate) fn clear_cloud(conn: &Connection, target: &str) -> Result<(), DbError> {
+    atomically(conn, || {
+        let newest: Option<i64> =
+            conn.query_row("SELECT MAX(timestamp) FROM history", [], |r| r.get(0))?;
+        let cutoff = newest
+            .max(cleared_at(conn, target)?)
+            .unwrap_or(i64::MIN)
+            .max(now_millis());
+        clear(conn)?;
+        session::save_named(conn, &clear_key(target), &cutoff)
+    })
 }

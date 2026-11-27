@@ -10,7 +10,7 @@ use crate::ui::sidebar::collections::TreeCache;
 use crate::ui::sidebar::history::HistoryCache;
 
 /// How many history entries the History panel lists, as many as are kept.
-pub const HISTORY_LISTED: usize = 100;
+pub use crate::domain::history::HISTORY_LIMIT as HISTORY_LISTED;
 
 /// Widget id of the inline rename field; the update handler focuses it.
 pub fn rename_input_id() -> iced::widget::Id {

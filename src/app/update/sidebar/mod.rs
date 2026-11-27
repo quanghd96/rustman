@@ -23,7 +23,11 @@ pub(super) fn handle(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
         SidebarMsg::ClearHistory => {
             state.history.clear();
             if let Some(store) = &state.store {
-                store.write_with(HistoryStore::clear_history, |e| Message::App(crate::message::AppMsg::StoreFailed(e)));
+                let target = state.cloud.history_target();
+                store.write_history(move |store| match target {
+                    Some(target) => store.clear_cloud_history(&target),
+                    None => store.clear_history(),
+                });
             }
         }
         SidebarMsg::DeleteAsked(_)

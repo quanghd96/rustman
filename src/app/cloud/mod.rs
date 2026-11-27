@@ -1,5 +1,6 @@
-//! One conditional S3 object per connected workspace.
+//! Conditional S3 sync for a workspace and its request history.
 
+mod history;
 mod s3;
 mod snapshot;
 
@@ -84,9 +85,11 @@ pub(crate) enum CloudMsg {
     Sync,
     Poll,
     Saved,
+    HistorySaved,
     UseLocal,
     UseCloud,
     Finished(Result<Arc<Outcome>, String>),
+    HistoryFinished(Result<history::Outcome, String>),
 }
 
 impl std::fmt::Debug for CloudMsg {
@@ -98,9 +101,11 @@ impl std::fmt::Debug for CloudMsg {
             Self::Sync => f.write_str("Sync"),
             Self::Poll => f.write_str("Poll"),
             Self::Saved => f.write_str("Saved"),
+            Self::HistorySaved => f.write_str("HistorySaved"),
             Self::UseLocal => f.write_str("UseLocal"),
             Self::UseCloud => f.write_str("UseCloud"),
             Self::Finished(_) => f.write_str("Finished"),
+            Self::HistoryFinished(_) => f.write_str("HistoryFinished"),
         }
     }
 }
@@ -137,6 +142,7 @@ pub(crate) struct State {
     profile: Profile,
     pub phase: Phase,
     queued: bool,
+    history: history::State,
 }
 
 impl State {
@@ -159,6 +165,7 @@ impl State {
             },
             phase,
             queued: false,
+            history: history::State::default(),
         }
     }
 
@@ -167,10 +174,31 @@ impl State {
     }
 
     pub(crate) fn busy(&self) -> bool {
-        matches!(self.phase, Phase::Working)
+        matches!(self.phase, Phase::Working) || self.history.busy
+    }
+
+    pub(crate) fn history_error(&self) -> Option<&str> {
+        self.history.error.as_deref()
+    }
+
+    pub(crate) fn history_target(&self) -> Option<String> {
+        self.profile.config.as_ref().map(|config| {
+            digest(format!("{}\n{}\n{}", config.endpoint, config.bucket, config.key).as_bytes())
+        })
     }
 
     pub(crate) fn label(&self) -> &'static str {
+        if matches!(self.phase, Phase::Current) {
+            if self.history.busy {
+                return "Cloud syncing history…";
+            }
+            if self.history.error.is_some() {
+                return "History sync failed";
+            }
+            if self.history.retry {
+                return "Cloud history changed · retrying";
+            }
+        }
         match self.phase {
             Phase::Idle if !self.connected() => "Cloud disconnected",
             Phase::Idle => "Cloud waiting",
@@ -234,7 +262,8 @@ pub(crate) fn handle(state: &mut AppState, msg: CloudMsg) -> Task<Message> {
             profile.config = Some(config.clone());
             if save_profile(state, profile) {
                 state.cloud.draft = config;
-                return start(state, None);
+                state.cloud.history = history::State::default();
+                return sync_all(state, true);
             }
         }
         CloudMsg::Disconnect if !state.cloud.busy() => {
@@ -242,13 +271,14 @@ pub(crate) fn handle(state: &mut AppState, msg: CloudMsg) -> Task<Message> {
                 state.cloud.draft = Config::default();
                 state.cloud.phase = Phase::Idle;
                 state.cloud.queued = false;
+                state.cloud.history = history::State::default();
             }
         }
-        CloudMsg::Sync => return start(state, None),
-        CloudMsg::Poll if !matches!(state.cloud.phase, Phase::Conflict(_)) => {
-            return start(state, None);
+        CloudMsg::Sync => return sync_all(state, true),
+        CloudMsg::Poll => {
+            return sync_all(state, !matches!(state.cloud.phase, Phase::Conflict(_)));
         }
-        CloudMsg::Saved if state.cloud.busy() => state.cloud.queued = true,
+        CloudMsg::Saved if matches!(state.cloud.phase, Phase::Working) => state.cloud.queued = true,
         CloudMsg::Saved if !matches!(state.cloud.phase, Phase::Conflict(_)) => {
             return start(state, None);
         }
@@ -265,9 +295,20 @@ pub(crate) fn handle(state: &mut AppState, msg: CloudMsg) -> Task<Message> {
             }
         }
         CloudMsg::Finished(result) => return finish(state, result),
+        CloudMsg::HistorySaved => return history::saved(state),
+        CloudMsg::HistoryFinished(result) => return history::finish(state, result),
         _ => {}
     }
     Task::none()
+}
+
+fn sync_all(state: &mut AppState, workspace: bool) -> Task<Message> {
+    let history = history::start(state);
+    if workspace {
+        Task::batch([start(state, None), history])
+    } else {
+        history
+    }
 }
 
 fn save_profile(state: &mut AppState, profile: Profile) -> bool {
@@ -286,7 +327,7 @@ fn save_profile(state: &mut AppState, profile: Profile) -> bool {
 }
 
 fn start(state: &mut AppState, choice: Option<(Choice, Option<String>)>) -> Task<Message> {
-    if state.cloud.busy() {
+    if matches!(state.cloud.phase, Phase::Working) {
         return Task::none();
     }
     let (Some(config), Some(store)) = (state.cloud.profile.config.clone(), state.store.as_ref())

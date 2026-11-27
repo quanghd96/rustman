@@ -157,7 +157,7 @@ pub fn add_history<'a>(
     conn: &Connection,
     entry: impl Into<Cow<'a, HistoryEntry>>,
 ) -> Result<(), String> {
-    reported(history::add(conn, entry.into(), HISTORY_BODY_LIMIT))
+    reported(history::add(conn, entry.into(), HISTORY_BODY_LIMIT, None))
 }
 
 /// Deletes all history.

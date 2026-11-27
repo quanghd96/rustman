@@ -6,7 +6,7 @@ use crate::app::AppState;
 use crate::app::scripting::{Engine, save_env_changes};
 use crate::app::session::{AUTOSAVE_PAUSE, persist_session, save_before_exit};
 use crate::domain::collection::SavedRequest;
-use crate::domain::history::HistoryEntry;
+use crate::domain::history::{HISTORY_LIMIT, HistoryEntry};
 use crate::domain::response::{BinaryPreviewKind, HttpResponse};
 use crate::jobs::JobKind;
 use crate::message::{AppMsg, FormatTarget, Message};
@@ -100,12 +100,17 @@ pub(super) fn handle(state: &mut AppState, msg: AppMsg) -> Task<Message> {
             let mut sent = SavedRequest::from(request);
             sent.id = uuid::Uuid::new_v4().to_string();
             let entry = HistoryEntry::new(sent, i32::from(status), i64::try_from(duration_ms).unwrap_or(i64::MAX));
-            state.history.insert(0, entry.summary());
+            let index = state.history.partition_point(|other| {
+                (other.timestamp, other.id.as_str()) > (entry.timestamp, entry.id.as_str())
+            });
+            state.history.insert(index, entry.summary());
+            state.history.truncate(HISTORY_LIMIT);
             if let Some(store) = &state.store {
-                store.write_with(move |store| store.append_history(entry), |e| Message::App(AppMsg::StoreFailed(e)));
-            }
-            if state.history.len() > 100 {
-                state.history.truncate(100);
+                let target = state.cloud.history_target();
+                store.write_history(move |store| match target {
+                    Some(target) => store.append_cloud_history(&target, entry),
+                    None => store.append_history(entry),
+                });
             }
 
             let Some(t) = state.tabs.get_mut(&tab_id) else {

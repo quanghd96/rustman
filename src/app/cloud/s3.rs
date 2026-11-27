@@ -50,16 +50,16 @@ impl Bucket {
         }
         let tag = etag(&response)?;
         if response.content_length().is_some_and(|n| n > LIMIT as u64) {
-            return Err("The cloud workspace exceeds 32 MiB".to_owned());
+            return Err("The cloud object exceeds 32 MiB".to_owned());
         }
         let mut data = Vec::new();
         while let Some(chunk) = response
             .chunk()
             .await
-            .map_err(|_| "Couldn't download the cloud workspace".to_owned())?
+            .map_err(|_| "Couldn't download the cloud object".to_owned())?
         {
             if chunk.len() > LIMIT - data.len() {
-                return Err("The cloud workspace exceeds 32 MiB".to_owned());
+                return Err("The cloud object exceeds 32 MiB".to_owned());
             }
             data.extend_from_slice(&chunk);
         }
@@ -268,7 +268,7 @@ fn etag(response: &Response) -> Result<String, String> {
                 && !tag[1..tag.len() - 1].contains('"')
         })
         .map(str::to_owned)
-        .ok_or_else(|| "The endpoint didn't return a strong ETag for the workspace".to_owned())
+        .ok_or_else(|| "The endpoint didn't return a strong ETag for the cloud object".to_owned())
 }
 
 fn http_error(code: StatusCode) -> String {

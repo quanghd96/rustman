@@ -32,7 +32,7 @@ pub(super) fn view<'a>(state: &'a AppState, t: &'a Tokens) -> Element<'a, Messag
 
     let mut page = column![
         text(cloud.label()).size(TEXT_MD).color(t.text),
-        text("Use the same private S3-compatible bucket and object key on each device. Saving a request syncs your collections in the background.")
+        text("Use the same private S3-compatible bucket and object key on each device. Saving a request syncs your collections, and sending a request syncs your last 100 history entries.")
             .size(TEXT_SM).color(t.text_muted),
     ].spacing(SPACE_LG);
     match &cloud.phase {
@@ -66,6 +66,9 @@ pub(super) fn view<'a>(state: &'a AppState, t: &'a Tokens) -> Element<'a, Messag
         }
         _ => {}
     }
+    if let Some(error) = cloud.history_error() {
+        page = page.push(text(format!("History sync failed. {error}")).size(TEXT_SM).color(t.status.error));
+    }
 
     page.push(column![
         input(t, Field::Endpoint, "Endpoint URL", "https://s3.us-east-1.amazonaws.com", &cfg.endpoint),
@@ -81,7 +84,7 @@ pub(super) fn view<'a>(state: &'a AppState, t: &'a Tokens) -> Element<'a, Messag
     .push(controls)
     .push(text("Your endpoint must support conditional PutObject. Use a bucket with versioning off to keep only the latest snapshot.")
         .size(TEXT_SM).color(t.text_muted))
-    .push(text("Sync includes saved requests, URL and body values. Environment values, recognized auth secrets, and attachment bytes stay on their original device.")
+    .push(text("Sync includes URLs, query parameters and body values. Environment values, recognized auth secrets, attachment bytes and oversized history bodies stay on their original device.")
         .size(TEXT_SM).color(t.text_muted))
     .into()
 }

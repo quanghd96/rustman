@@ -33,11 +33,16 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 fn header<'a>(state: &AppState, t: &'static Tokens) -> Element<'a, Message> {
     let clear = button(t, "Clear", Variant::Ghost, Size::Compact)
         .on_press_maybe((!state.history.is_empty()).then_some(Message::Sidebar(SidebarMsg::ClearHistory)));
+    let clear_label = if state.cloud.connected() {
+        "Delete all history entries from synced devices"
+    } else {
+        "Delete all history entries"
+    };
     container(
         row![
             text("History").size(TEXT_LG).font(UI_FONT_MEDIUM).color(t.text),
             Space::new().width(Length::Fill),
-            tooltip::tooltip(t, clear, "Delete all history entries", None),
+            tooltip::tooltip(t, clear, clear_label, None),
         ]
         .align_y(Alignment::Center),
     )

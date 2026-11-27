@@ -53,6 +53,40 @@ impl SqliteStore {
         Ok(session::save_named(&self.conn, "cloud", profile)?)
     }
 
+    /// The most recent clear, used to keep older cloud entries from returning.
+    pub fn history_cleared_at(&self, target: &str) -> Result<Option<i64>, StoreError> {
+        Ok(history::cleared_at(&self.conn, target)?)
+    }
+
+    /// Merges history by entry ID while preserving the data already held locally.
+    pub fn merge_cloud_history(
+        &mut self,
+        target: &str,
+        cleared_at: Option<i64>,
+        entries: &[HistoryEntry],
+    ) -> Result<(), StoreError> {
+        Ok(history::merge(&self.conn, target, cleared_at, entries)?)
+    }
+
+    /// Deletes the local history and records the deletion for this cloud target.
+    pub fn clear_cloud_history(&mut self, target: &str) -> Result<(), StoreError> {
+        Ok(history::clear_cloud(&self.conn, target)?)
+    }
+
+    /// Records a request after any clear already observed for the cloud target.
+    pub fn append_cloud_history(
+        &mut self,
+        target: &str,
+        entry: HistoryEntry,
+    ) -> Result<(), StoreError> {
+        Ok(history::add(
+            &self.conn,
+            entry.into(),
+            HISTORY_BODY_LIMIT,
+            Some(target),
+        )?)
+    }
+
     /// Install a validated snapshot and acknowledge the corresponding object together.
     pub fn replace_cloud_workspace<T: Serialize>(
         &mut self,
@@ -138,6 +172,7 @@ impl HistoryStore for SqliteStore {
             &self.conn,
             Cow::Owned(entry),
             HISTORY_BODY_LIMIT,
+            None,
         )?)
     }
 

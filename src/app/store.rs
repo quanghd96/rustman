@@ -13,6 +13,7 @@ use rustman_core::store::{Change, StoreError, WorkspaceStore};
 use rustman_store::{SqliteStore, StoreThread};
 use tokio::sync::mpsc;
 
+use crate::app::cloud::CloudMsg;
 use crate::message::{AppMsg, Message};
 
 pub(crate) struct Store {
@@ -74,18 +75,38 @@ impl Store {
                     | Change::DeleteEnvironment { .. }
             )
         });
+        self.write_and_notify(move |store| store.apply(&changes), on_failure, sync_data.then_some(CloudMsg::Saved));
+    }
+
+    pub(crate) fn write_history(
+        &self,
+        job: impl FnOnce(&mut SqliteStore) -> Result<(), StoreError> + Send + 'static,
+    ) {
+        self.write_and_notify(job, |error| Message::App(AppMsg::StoreFailed(error)), Some(CloudMsg::HistorySaved));
+    }
+
+    fn write_and_notify(
+        &self,
+        job: impl FnOnce(&mut SqliteStore) -> Result<(), StoreError> + Send + 'static,
+        on_failure: impl FnOnce(String) -> Message + Send + 'static,
+        notification: Option<CloudMsg>,
+    ) {
         let enabled = self.cloud_enabled.clone();
         let events = self.failed.clone();
         self.write_with(
             move |store| {
-                store.apply(&changes)?;
-                if sync_data && enabled.load(Ordering::Relaxed) {
-                    let _ = events.send(Message::Cloud(crate::app::cloud::CloudMsg::Saved));
+                job(store)?;
+                if let Some(notification) = notification.filter(|_| enabled.load(Ordering::Relaxed)) {
+                    let _ = events.send(Message::Cloud(notification));
                 }
                 Ok(())
             },
             on_failure,
         );
+    }
+
+    pub(crate) fn worker(&self) -> StoreThread {
+        self.thread.clone()
     }
 
     /// Apply a short database-only operation after all previously queued edits.
