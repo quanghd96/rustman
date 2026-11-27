@@ -60,7 +60,7 @@ fn fail_before_sending(state: &mut AppState, error: String) {
 /// Sends the active tab the way [`Runner::run`] does, split where the app
 /// has to touch its state: the pre-request scripts run here, the send runs
 /// as a task, and the test scripts run when its result arrives.
-pub(crate) fn send_request(state: &mut AppState) -> Task<Message> {
+pub(crate) fn send_request(state: &mut AppState, ignore_certificate_errors: bool) -> Task<Message> {
     let global_script = state.global_pre_request_editor.text();
     let mut model = state.tabs.active_tab().to_request();
     let env = state.environments.iter_mut().find(|e| e.is_active);
@@ -73,8 +73,15 @@ pub(crate) fn send_request(state: &mut AppState) -> Task<Message> {
         return Task::none();
     }
     let active_env = state.active_env().cloned();
-    let client = match state.http() {
-        Ok(client) => client.clone(),
+    let client = state.http().and_then(|client| {
+        if ignore_certificate_errors {
+            client.without_certificate_verification(state.tls_options)
+        } else {
+            Ok(client.clone())
+        }
+    });
+    let client = match client {
+        Ok(client) => client,
         Err(e) => {
             fail_before_sending(state, format!("Couldn't set up the HTTP client: {e}"));
             return Task::none();
@@ -311,7 +318,7 @@ mod tests {
         tab.pre_request_editor = make_code_editor("set_env(\"token\", \"new\")\nset_body(\"sent\")", "txt");
         tab.test_editor = make_code_editor("test(\"saw the sent body\", body() == \"sent\")", "txt");
 
-        let task = send_request(&mut state);
+        let task = send_request(&mut state, false);
         complete(&mut state, task);
 
         let tab = state.tabs.active_tab();

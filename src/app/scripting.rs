@@ -77,6 +77,7 @@ mod tests {
             duration_ms: 5,
             error: None,
             redirects: Vec::new(),
+            connection: None,
         };
 
         let pre = pre_request_host_input(&tab, None);
@@ -178,6 +179,7 @@ mod tests {
             duration_ms: 5,
             error: None,
             redirects: Vec::new(),
+            connection: None,
         };
 
         let input = test_host_input(&tab, None, &resp);
@@ -205,6 +207,7 @@ mod tests {
             duration_ms: 5,
             error: None,
             redirects: Vec::new(),
+            connection: None,
         };
 
         let input = test_host_input(&tab, None, &resp);

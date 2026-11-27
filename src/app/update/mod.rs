@@ -49,6 +49,9 @@ pub(crate) fn update(state: &mut AppState, message: Message) -> Task<Message> {
 /// Expanded editors DO dirty on content edits (their write-back mutates the
 /// snapshot); navigation/selection/search inside them does not.
 pub(crate) fn marks_session_dirty(message: &Message) -> bool {
+    if let Message::Request(crate::message::RequestMsg::UrlEdited(action)) = message {
+        return request::url_action_edits_content(action);
+    }
     if let Message::Request(crate::message::RequestMsg::FormValueEdited(_, editor_msg)) = message {
         return crate::state::tabs::editor_message_edits_content(editor_msg);
     }
@@ -89,7 +92,10 @@ pub(crate) fn marks_session_dirty(message: &Message) -> bool {
                 | crate::message::WindowMsg::Resized(_)
                 | crate::message::WindowMsg::MaximizedChanged(_)
         )
-        | Message::Response(crate::message::ResponseMsg::FailureDetailsToggled)
+        | Message::Response(
+            crate::message::ResponseMsg::FailureDetailsToggled
+                | crate::message::ResponseMsg::ConnectionFieldSelected(..)
+        )
         | Message::ModifiersChanged(_)
         | Message::Cloud(_)
         // Pressing, dragging over and right-clicking tree rows is transient
@@ -217,6 +223,9 @@ fn shift_click_extends_selection(modifiers: iced::keyboard::Modifiers, message: 
         }
         Message::Response(ResponseMsg::ConsoleEdited(a)) => {
             Message::Response(ResponseMsg::ConsoleEdited(extend(a)))
+        }
+        Message::Response(ResponseMsg::ConnectionFieldSelected(index, a)) => {
+            Message::Response(ResponseMsg::ConnectionFieldSelected(index, extend(a)))
         }
         Message::Settings(SettingsMsg::GlobalPreRequestScriptEdited(a)) => {
             Message::Settings(SettingsMsg::GlobalPreRequestScriptEdited(extend(a)))

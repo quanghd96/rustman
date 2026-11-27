@@ -5,6 +5,7 @@
 use iced::widget::{Space, column, container, row, text, text_editor};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, keyboard};
 
+use super::url_viewport::url_viewport;
 use crate::domain::environment::AppEnvironment;
 use crate::domain::request::HttpMethod;
 use crate::message::{AppMsg, MenuId, Message, RequestMsg, SidebarMsg, SidebarPanel};
@@ -80,11 +81,12 @@ fn url_field<'a>(
         .font(MONO)
         .size(TEXT_MD)
         .height(Length::Shrink)
-        .padding([0.0, SPACE_LG])
+        .padding(0)
         .wrapping(iced_core::text::Wrapping::None)
         .style(move |_, _| editor_style(t));
+    let editor = url_viewport(editor, &tab.id, &tab.url_editor);
     let field = container(
-        row![lead, container(editor).center_y(Length::Fill).width(Length::Fill)]
+        row![lead, container(editor).center_y(Length::Fill).width(Length::Fill).padding([0.0, SPACE_LG])]
             .align_y(Alignment::Center)
             .height(Length::Fill),
     )

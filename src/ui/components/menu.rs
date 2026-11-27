@@ -224,7 +224,7 @@ pub fn popover<'a, M: Clone + 'a>(
     align: Align,
     on_dismiss: M,
 ) -> Element<'a, M> {
-    floating_panel(anchor, panel, align, on_dismiss, true)
+    floating_panel(anchor, panel, align, on_dismiss, true, true)
 }
 
 /// A popover that lets outside presses reach the next input or trigger.
@@ -234,7 +234,17 @@ pub fn nonmodal_popover<'a, M: Clone + 'a>(
     align: Align,
     on_dismiss: M,
 ) -> Element<'a, M> {
-    floating_panel(anchor, panel, align, on_dismiss, false)
+    floating_panel(anchor, panel, align, on_dismiss, false, true)
+}
+
+/// A popover whose contents remain open for pointer and keyboard interaction.
+pub fn interactive_popover<'a, M: Clone + 'a>(
+    anchor: impl Into<Element<'a, M>>,
+    panel: Option<Element<'a, M>>,
+    align: Align,
+    on_dismiss: M,
+) -> Element<'a, M> {
+    floating_panel(anchor, panel, align, on_dismiss, true, false)
 }
 
 fn floating_panel<'a, M: Clone + 'a>(
@@ -243,6 +253,7 @@ fn floating_panel<'a, M: Clone + 'a>(
     align: Align,
     on_dismiss: M,
     capture_outside: bool,
+    dismiss_inside: bool,
 ) -> Element<'a, M> {
     Element::new(Popover {
         anchor: anchor.into(),
@@ -250,6 +261,7 @@ fn floating_panel<'a, M: Clone + 'a>(
         align,
         on_dismiss,
         capture_outside,
+        dismiss_inside,
     })
 }
 
@@ -275,6 +287,7 @@ struct Popover<'a, M> {
     align: Align,
     on_dismiss: M,
     capture_outside: bool,
+    dismiss_inside: bool,
 }
 
 impl<M: Clone> Popover<'_, M> {
@@ -391,6 +404,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Popover<'_, M> {
                 align: self.align,
                 on_dismiss: self.on_dismiss.clone(),
                 capture_outside: self.capture_outside,
+                dismiss_inside: self.dismiss_inside,
             }))),
             _ => None,
         };
@@ -409,6 +423,7 @@ struct PanelOverlay<'a, 'b, M> {
     align: Align,
     on_dismiss: M,
     capture_outside: bool,
+    dismiss_inside: bool,
 }
 
 impl<M: Clone> overlay::Overlay<M, iced::Theme, iced::Renderer> for PanelOverlay<'_, '_, M> {
@@ -458,7 +473,9 @@ impl<M: Clone> overlay::Overlay<M, iced::Theme, iced::Renderer> for PanelOverlay
                     shell.capture_event();
                 }
             }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if over_panel => {
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if over_panel && self.dismiss_inside =>
+            {
                 shell.publish(self.on_dismiss.clone());
             }
             Event::Keyboard(keyboard::Event::KeyPressed {

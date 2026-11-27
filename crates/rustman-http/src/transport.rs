@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use reqwest::Client;
 use rustman_core::domain::resolved::ResolvedRequest;
 use rustman_core::domain::response::Redirect;
 use rustman_core::run::{HttpTransport, Response, SendOptions, TransportError};
 
+use crate::client::HttpClient;
 use crate::error::SendError;
 use crate::request::Built;
 use crate::{redirect, request, response};
@@ -13,12 +13,14 @@ use crate::{redirect, request, response};
 /// TLS settings every request shares.
 #[derive(Debug, Clone)]
 pub struct ReqwestTransport {
-    client: Client,
+    client: HttpClient,
 }
 
 impl ReqwestTransport {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(client: impl Into<HttpClient>) -> Self {
+        Self {
+            client: client.into(),
+        }
     }
 }
 
@@ -37,7 +39,7 @@ impl HttpTransport for ReqwestTransport {
 /// Sends `request`, following redirects by hand (see [`redirect::follow`]),
 /// all within one timeout.
 async fn exchange(
-    client: &Client,
+    client: &HttpClient,
     request: ResolvedRequest<'_>,
     options: &SendOptions,
 ) -> Result<Response, SendError> {
@@ -45,17 +47,28 @@ async fn exchange(
     let Built {
         request: mut next,
         has_payload,
-    } = request::build(client, request)?;
+    } = request::build(&client.client, request)?;
     let mut redirects = Vec::new();
     loop {
         // A streamed body (a multipart upload) can't be sent twice, so its
         // redirect is returned rather than followed.
         let again = next.try_clone();
         *next.timeout_mut() = Some(deadline.saturating_duration_since(Instant::now()));
-        let response = client.execute(next).await.map_err(SendError::Transport)?;
+        let response = client
+            .client
+            .execute(next)
+            .await
+            .map_err(SendError::transport)?;
         let followed = again.zip(redirect::target(&response));
         let Some((again, to)) = followed else {
             let mut out = response::read(response, options.body_limit).await?;
+            if let Some(tls) = out
+                .connection
+                .as_mut()
+                .and_then(|connection| connection.tls.as_mut())
+            {
+                tls.verified = client.verifies_certificates;
+            }
             out.redirects = redirects;
             return Ok(out);
         };

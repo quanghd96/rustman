@@ -92,6 +92,9 @@ pub fn alert<'a>() -> Text<'a> {
 pub fn lock<'a>() -> Text<'a> {
     glyph('\u{e10b}')
 } // lock
+pub fn lock_open<'a>() -> Text<'a> {
+    glyph('\u{e10c}')
+} // lock-open
 pub fn refresh<'a>() -> Text<'a> {
     glyph('\u{e145}')
 } // refresh-cw

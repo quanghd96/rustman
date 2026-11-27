@@ -11,6 +11,6 @@ mod response;
 mod transport;
 pub mod websocket;
 
-pub use client::{TlsOptions, TlsPin, build_client_with, try_build_client};
+pub use client::{HttpClient, TlsOptions, TlsPin, build_client_with, try_build_client};
 pub use rustman_core::jwt::{make_jwt, make_jwt_at};
 pub use transport::ReqwestTransport;

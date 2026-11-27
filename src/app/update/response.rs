@@ -248,6 +248,14 @@ pub(super) fn handle(state: &mut AppState, msg: ResponseMsg) -> Task<Message> {
             let tab = state.tabs.active_tab_mut();
             tab.console_editor.perform(action);
         }
+        ResponseMsg::ConnectionFieldSelected(index, action) => {
+            if !action.is_edit()
+                && let Some(field) = state.tabs.active_tab_mut().response_view.as_mut()
+                    .and_then(|view| view.connection_fields.get_mut(index))
+            {
+                field.value.perform(action);
+            }
+        }
     }
     Task::none()
 }

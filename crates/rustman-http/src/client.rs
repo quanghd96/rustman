@@ -1,6 +1,38 @@
+use std::sync::Arc;
+
+use reqwest::cookie::Jar;
 use reqwest::redirect::Policy;
 use reqwest::tls::Version;
 use reqwest::{Client, NoProxy, Proxy};
+
+/// The connection pool and its effective verification policy.
+#[derive(Debug, Clone)]
+pub struct HttpClient {
+    pub(crate) client: Client,
+    pub(crate) verifies_certificates: Option<bool>,
+    cookies: Option<Arc<Jar>>,
+}
+
+impl From<Client> for HttpClient {
+    fn from(client: Client) -> Self {
+        Self {
+            client,
+            verifies_certificates: None,
+            cookies: None,
+        }
+    }
+}
+
+impl HttpClient {
+    /// A new connection pool for this retry, with the same cookies as the usual client.
+    pub fn without_certificate_verification(
+        &self,
+        mut options: TlsOptions,
+    ) -> Result<Self, String> {
+        options.accept_invalid_certs = true;
+        build(options, self.cookies.clone().unwrap_or_default())
+    }
+}
 
 const USER_AGENT: &str = concat!("rustman/", env!("CARGO_PKG_VERSION"));
 
@@ -37,22 +69,27 @@ pub enum TlsPin {
 ///
 /// TLS settings live on the client because it owns the connection pool, so
 /// changing them means building a new one.
-pub fn try_build_client(options: TlsOptions) -> Result<Client, String> {
+pub fn try_build_client(options: TlsOptions) -> Result<HttpClient, String> {
+    build(options, Arc::default())
+}
+
+fn build(options: TlsOptions, cookies: Arc<Jar>) -> Result<HttpClient, String> {
     // Bodies are decoded in `response::read`, behind the size cap.
     // Redirects are followed in `transport`, which strips what they mustn't
     // carry to another host.
     let mut builder = Client::builder()
-        .cookie_store(true)
+        .cookie_provider(cookies.clone())
         .redirect(Policy::none())
         .user_agent(USER_AGENT)
         .no_gzip()
         .no_brotli()
         .no_deflate()
-        .no_zstd();
+        .no_zstd()
+        .tls_info(true);
     if options.accept_invalid_certs {
         builder = builder
-            .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true);
+            .tls_danger_accept_invalid_certs(true)
+            .tls_danger_accept_invalid_hostnames(true);
     }
     if options.http1_only {
         builder = builder.http1_only();
@@ -63,12 +100,17 @@ pub fn try_build_client(options: TlsOptions) -> Result<Client, String> {
         TlsPin::Tls13 => Some(Version::TLS_1_3),
     };
     if let Some(version) = pinned {
-        builder = builder.min_tls_version(version).max_tls_version(version);
+        builder = builder.tls_version_min(version).tls_version_max(version);
     }
     for proxy in env_proxies() {
         builder = builder.proxy(proxy);
     }
-    builder.build().map_err(|e| e.to_string())
+    let client = builder.build().map_err(|e| e.to_string())?;
+    Ok(HttpClient {
+        client,
+        verifies_certificates: Some(!options.accept_invalid_certs),
+        cookies: Some(cookies),
+    })
 }
 
 /// The proxies `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (or their
@@ -99,7 +141,7 @@ fn first_env(names: &[&str]) -> Option<String> {
 /// [`try_build_client`], falling back to default TLS settings (and logging
 /// why) when `options` are rejected. Fails only when even those can't be
 /// set up, as with a broken system certificate store.
-pub fn build_client_with(options: TlsOptions) -> Result<Client, String> {
+pub fn build_client_with(options: TlsOptions) -> Result<HttpClient, String> {
     try_build_client(options).or_else(|err| {
         eprintln!("HTTP client: {err}; falling back to default TLS settings");
         try_build_client(TlsOptions::default())

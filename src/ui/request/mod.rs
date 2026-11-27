@@ -7,3 +7,4 @@ pub mod scripts;
 pub mod tabs;
 pub mod url_bar;
 pub mod websocket;
+mod url_viewport;

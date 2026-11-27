@@ -198,9 +198,15 @@ fn credentialed(url: String) -> SavedRequest {
 #[tokio::test]
 async fn a_redirect_to_another_host_carries_none_of_the_request_s_headers() {
     let (landing, landed) = serve_once(ok());
+    let final_socket = landing.strip_prefix("http://").unwrap().parse().unwrap();
     let (start, first) = serve_once(redirect("302 Found", &format!("{landing}/landing")));
 
     let response = send_to_test_server(&credentialed(start)).await;
+    let connection = response.connection.as_ref().unwrap();
+    assert_eq!(connection.http_version, "HTTP/1.1");
+    assert_eq!(connection.remote_addr, Some(final_socket));
+    assert!(connection.local_addr.unwrap().ip().is_loopback());
+    assert!(connection.tls.is_none());
 
     let first = first.join().unwrap();
     assert_eq!(first.header("x-api-key"), ["k"]);

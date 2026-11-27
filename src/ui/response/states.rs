@@ -99,7 +99,7 @@ fn failure_card<'a>(failure: &'a Failure, details_open: bool, t: &'a Tokens) -> 
         Space::new().height(SPACE_XS),
         text(failure.hint.as_str()).size(TEXT_MD).line_height(line(LINE_MD)).color(t.text_muted),
         Space::new().height(SPACE_XL),
-        failure_actions(details_open, t),
+        failure_actions(failure.kind, details_open, t),
     ];
     if details_open {
         content = content.push(Space::new().height(SPACE_XL)).push(failure_details(failure, t));
@@ -111,6 +111,7 @@ fn failure_icon(kind: FailureKind, t: &Tokens) -> Element<'_, Message> {
     let glyph = match kind {
         FailureKind::Refused | FailureKind::Connect => icons::unplug(),
         FailureKind::Dns => icons::wifi_off(),
+        FailureKind::Certificate => icons::lock_open(),
         FailureKind::Tls => icons::shield_alert(),
         FailureKind::Timeout => icons::hourglass(),
         FailureKind::Script | FailureKind::Other => icons::alert_triangle(),
@@ -128,11 +129,16 @@ fn failure_icon(kind: FailureKind, t: &Tokens) -> Element<'_, Message> {
         .into()
 }
 
-fn failure_actions(details_open: bool, t: &Tokens) -> Element<'_, Message> {
+fn failure_actions(kind: FailureKind, details_open: bool, t: &Tokens) -> Element<'_, Message> {
     let chevron = if details_open { icons::chevron_up() } else { icons::chevron_down() };
+    let (icon, label, retry) = if kind == FailureKind::Certificate {
+        (icons::lock_open(), "Ignore certificate and retry", RequestMsg::RetryWithoutCertificateVerification)
+    } else {
+        (icons::refresh(), "Retry", RequestMsg::Send)
+    };
     row![
-        button_with_icon(t, icons::refresh(), "Retry", Variant::Secondary, Size::Large)
-            .on_press(Message::Request(RequestMsg::Send)),
+        button_with_icon(t, icon, label, Variant::Secondary, Size::Large)
+            .on_press(Message::Request(retry)),
         button_with_trailing_icon(t, "Details", chevron, Variant::Ghost, Size::Large)
             .on_press(Message::Response(ResponseMsg::FailureDetailsToggled)),
     ]

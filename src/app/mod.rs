@@ -25,6 +25,9 @@ mod subscription;
 pub(crate) mod tree;
 mod update;
 
+#[cfg(test)]
+pub(crate) use update::update as test_update;
+
 /// Transient state of the main window's chrome. Never persisted.
 #[derive(Debug, Default)]
 pub struct Chrome {
@@ -93,7 +96,7 @@ pub struct AppState {
     pub requests: HashMap<String, Vec<SavedRequest>>,
     pub history: Vec<HistorySummary>,
     pub environments: Vec<AppEnvironment>,
-    pub http_client: OnceCell<reqwest::Client>,
+    pub http_client: OnceCell<rustman_http::HttpClient>,
     /// The storage thread; `None` when the database couldn't be opened.
     pub store: Option<store::Store>,
     /// Keeps other Rustman processes from writing `data_dir` while this one
@@ -256,7 +259,7 @@ impl AppState {
     /// `invalidate_http_client` — otherwise a new setting would silently have
     /// no effect until restart. Fails when TLS can't be set up at all, as
     /// with a broken system certificate store.
-    pub(crate) fn http(&self) -> Result<&reqwest::Client, String> {
+    pub(crate) fn http(&self) -> Result<&rustman_http::HttpClient, String> {
         if let Some(client) = self.http_client.get() {
             return Ok(client);
         }

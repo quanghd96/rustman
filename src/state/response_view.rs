@@ -3,8 +3,10 @@
 
 use std::time::{Duration, Instant};
 
+use iced::widget::text_editor;
+
 use crate::domain::request::HttpMethod;
-use crate::domain::response::{HttpResponse, Redirect};
+use crate::domain::response::{ConnectionDetails, HttpResponse, Redirect};
 
 /// A request on the wire: when it left and where it went.
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ impl Sent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ResponseView {
     /// "200 OK", or the short failure reason ("Connection refused").
     pub status: String,
@@ -43,6 +45,44 @@ pub struct ResponseView {
     /// The redirects followed on the way, when there were any.
     pub redirects: Option<Redirects>,
     pub failure: Option<Failure>,
+    pub connection_fields: Vec<ConnectionField>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConnectionField {
+    pub label: &'static str,
+    pub value: text_editor::Content,
+}
+
+fn connection_fields(connection: &ConnectionDetails) -> Vec<ConnectionField> {
+    let address = |socket: Option<std::net::SocketAddr>| {
+        socket.map_or_else(|| "Unavailable".to_owned(), |socket| socket.to_string())
+    };
+    let mut fields = Vec::new();
+    let mut push = |label, value: &str| {
+        fields.push(ConnectionField { label, value: text_editor::Content::with_text(value) });
+    };
+    push("HTTP version", connection.http_version);
+    push("Local IP and port", &address(connection.local_addr));
+    push("Remote IP and port", &address(connection.remote_addr));
+    if let Some(tls) = &connection.tls {
+        let verification = match tls.verified {
+            Some(true) => "Verified",
+            Some(false) => "Verification disabled",
+            None => "Unavailable",
+        };
+        push("TLS version", tls.version.unwrap_or("Unavailable"));
+        push("Certificate", verification);
+        if let Some(certificate) = &tls.certificate {
+            push("Subject", &certificate.subject);
+            push("Issuer", &certificate.issuer);
+            push("Valid from", &certificate.valid_from);
+            push("Valid until", &certificate.valid_until);
+        }
+    } else {
+        push("TLS", "Unencrypted HTTP");
+    }
+    fields
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +117,7 @@ impl ResponseView {
                     size_tip: None,
                     redirects: None,
                     failure: Some(failure),
+                    connection_fields: Vec::new(),
                 }
             }
             None => ResponseView {
@@ -86,6 +127,7 @@ impl ResponseView {
                 size_tip: wire_size_tip(resp),
                 redirects: Redirects::of(&resp.redirects),
                 failure: None,
+                connection_fields: resp.connection.as_ref().map_or_else(Vec::new, connection_fields),
             },
         }
     }
@@ -123,6 +165,7 @@ pub fn duration_label(ms: u64) -> String {
 pub enum FailureKind {
     Refused,
     Dns,
+    Certificate,
     Tls,
     Timeout,
     /// Reached the network layer but failed some other way (reset, closed).
@@ -138,6 +181,7 @@ impl FailureKind {
         match self {
             FailureKind::Refused => "Connection refused",
             FailureKind::Dns => "DNS lookup failed",
+            FailureKind::Certificate => "Certificate verification failed",
             FailureKind::Tls => "TLS handshake failed",
             FailureKind::Timeout => "Timed out",
             FailureKind::Connect => "Connection failed",
@@ -189,11 +233,15 @@ fn describe(kind: FailureKind, host: &str, timeout_ms: u64) -> (String, String) 
             format!("DNS lookup failed for {}", host_name(host)),
             "The name didn't resolve. Check the spelling, or your network and DNS settings.".to_owned(),
         ),
+        FailureKind::Certificate => (
+            "Certificate verification failed".to_owned(),
+            format!(
+                "Rustman couldn't verify the certificate for {host}. If you trust this server, you can retry once with certificate verification off."
+            ),
+        ),
         FailureKind::Tls => (
             "TLS handshake failed".to_owned(),
-            format!(
-                "{host} didn't present a certificate this machine trusts. For a self-signed server, allow invalid certificates in Settings."
-            ),
+            format!("Rustman couldn't establish a TLS connection to {host}. See Details for the underlying error."),
         ),
         FailureKind::Timeout => (
             format!("Timed out after {}", whole_seconds(timeout_ms)),
@@ -219,7 +267,9 @@ fn describe(kind: FailureKind, host: &str, timeout_ms: u64) -> (String, String) 
 pub fn classify(raw: &str) -> FailureKind {
     let lower = raw.to_ascii_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| lower.contains(n));
-    if lower.contains("script error") {
+    if lower.starts_with("certificate verification failed:") {
+        FailureKind::Certificate
+    } else if lower.contains("script error") {
         FailureKind::Script
     } else if has(&["timed out", "timeout"]) {
         FailureKind::Timeout
@@ -238,7 +288,8 @@ pub fn classify(raw: &str) -> FailureKind {
 
 /// The cause after the HTTP layer's "Category: " prefix.
 fn cause(raw: &str) -> &str {
-    const CATEGORIES: [&str; 5] = [
+    const CATEGORIES: [&str; 6] = [
+        "Certificate verification failed: ",
         "Connection failed: ",
         "Request timed out: ",
         "Request failed: ",
@@ -300,6 +351,7 @@ mod tests {
             ("Connection failed: No connection could be made (os error 10061)", FailureKind::Refused),
             ("Connection failed: dns error: failed to lookup address information: Name or service not known", FailureKind::Dns),
             ("Connection failed: invalid peer certificate: UnknownIssuer", FailureKind::Tls),
+            ("Certificate verification failed: invalid peer certificate: UnknownIssuer", FailureKind::Certificate),
             ("Request timed out: operation timed out", FailureKind::Timeout),
             ("Connection failed: connection reset by peer", FailureKind::Connect),
             ("Pre-request script error: x is not defined", FailureKind::Script),

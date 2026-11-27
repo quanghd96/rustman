@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +28,33 @@ pub struct HttpResponse {
     /// The redirects followed to get here, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redirects: Vec<Redirect>,
+    /// Live connection diagnostics for the final response.
+    #[serde(skip)]
+    pub connection: Option<ConnectionDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionDetails {
+    pub http_version: &'static str,
+    pub local_addr: Option<SocketAddr>,
+    pub remote_addr: Option<SocketAddr>,
+    pub tls: Option<TlsDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TlsDetails {
+    pub version: Option<&'static str>,
+    /// Whether the client enforced certificate verification on this connection.
+    pub verified: Option<bool>,
+    pub certificate: Option<CertificateDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertificateDetails {
+    pub subject: String,
+    pub issuer: String,
+    pub valid_from: String,
+    pub valid_until: String,
 }
 
 /// A redirect that was followed.

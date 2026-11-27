@@ -35,7 +35,7 @@ pub fn pane<'a>(
         return states::failed(tab, failure, &view.status, t);
     }
     let bar = tabs::bar(tab, t);
-    let bar = match header::trailing(tab, t) {
+    let bar = match header::trailing(tab, open_menu == Some(MenuId::ResponseConnection), t) {
         Some(header) => bar.trailing(header),
         None => bar,
     };

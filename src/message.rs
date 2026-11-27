@@ -249,6 +249,7 @@ pub enum RequestMsg {
     SwitchTab(usize),
     // Actions
     Send,
+    RetryWithoutCertificateVerification,
     Abort,
     Undo,
     Redo,
@@ -315,6 +316,7 @@ pub enum ResponseMsg {
     BodyOpened(Result<(), String>),
     ViewerEdited(iced_code_editor::Message),
     ConsoleEdited(iced::widget::text_editor::Action),
+    ConnectionFieldSelected(usize, iced::widget::text_editor::Action),
     /// Step the response viewer one page (see `page_starts` in state/tabs).
     ViewerPagePrev,
     ViewerPageNext,
@@ -348,6 +350,7 @@ pub enum MenuId {
     OpenTabs,
     TabContext(usize),
     ResponseFormat,
+    ResponseConnection,
     /// The collections sidebar's "New" menu.
     SidebarNew,
     /// Value suggestions for the header in this row.

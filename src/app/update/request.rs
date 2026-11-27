@@ -90,11 +90,11 @@ fn request_close(state: &mut AppState, targets: impl Fn(usize, &RequestTabState)
     }
 }
 
-fn send(state: &mut AppState) -> Task<Message> {
+fn send(state: &mut AppState, ignore_certificate_errors: bool) -> Task<Message> {
     if state.tabs.active_tab().url.trim().is_empty() {
         return Task::none();
     }
-    let task = send_request(state);
+    let task = send_request(state, ignore_certificate_errors);
     let timeout_ms = state.default_timeout_ms;
     let env = state.environments.iter().find(|e| e.is_active);
     let tab = state.tabs.active_tab_mut();
@@ -319,7 +319,15 @@ pub(super) fn handle(state: &mut AppState, msg: RequestMsg) -> Task<Message> {
             state.tabs.switch_to(i);
             return Task::none();
         }
-        RequestMsg::Send => return send(state),
+        RequestMsg::Send => return send(state, false),
+        RequestMsg::RetryWithoutCertificateVerification => {
+            if !tab.is_loading
+                && tab.response_view.as_ref().and_then(|view| view.failure.as_ref())
+                    .is_some_and(|failure| failure.kind == crate::state::response_view::FailureKind::Certificate)
+            {
+                return send(state, true);
+            }
+        }
         RequestMsg::HeaderAdded => {
             tab.headers
                 .push(crate::domain::request::KeyValue::new_empty());
@@ -877,7 +885,7 @@ enum EditClass {
 /// Whether a URL-bar editor action mutates the text (for undo coalescing
 /// and the `UrlChanged` follow-up). Navigation, selection and focus never
 /// count — cursor moves must not mark the tab modified.
-fn url_action_edits_content(action: &iced::widget::text_editor::Action) -> bool {
+pub(super) fn url_action_edits_content(action: &iced::widget::text_editor::Action) -> bool {
     use iced::widget::text_editor::{Action as UrlAction, Edit as UrlEdit};
     matches!(
         action,

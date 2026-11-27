@@ -13,12 +13,14 @@ rustman-core.workspace = true
 async-compression.workspace = true
 base64.workspace = true
 futures-util.workspace = true
+hyper-util = { version = "0.1", features = ["client-legacy"] }
 reqwest.workspace = true
 rustls.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util", "rt", "sync"] }
 tokio-tungstenite.workspace = true
 tokio-util = { workspace = true, features = ["io"] }
+x509-parser = "0.18"
 
 [dev-dependencies]
 http = "1"

@@ -4,8 +4,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_compression::tokio::bufread::{BrotliDecoder, GzipDecoder, ZlibDecoder, ZstdDecoder};
 use futures_util::TryStreamExt;
+use hyper_util::client::legacy::connect::HttpInfo;
+use reqwest::Version;
 use reqwest::header::{CONTENT_ENCODING, HeaderMap};
+use reqwest::tls::{TlsInfo, Version as TlsVersion};
 use rustman_core::domain::headers::Headers;
+use rustman_core::domain::response::{CertificateDetails, ConnectionDetails, TlsDetails};
 use rustman_core::run::{BodySize, Response};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::io::StreamReader;
@@ -47,6 +51,7 @@ impl Encoding {
 /// gigabytes is never held whole. The headers are kept as received.
 pub(crate) async fn read(response: reqwest::Response, limit: usize) -> Result<Response, SendError> {
     let status = response.status();
+    let connection = connection_details(&response);
     let headers: Headers = response
         .headers()
         .iter()
@@ -66,6 +71,55 @@ pub(crate) async fn read(response: reqwest::Response, limit: usize) -> Result<Re
         truncated: size.decoded > limit,
         size,
         redirects: Vec::new(),
+        connection: Some(connection),
+    })
+}
+
+fn connection_details(response: &reqwest::Response) -> ConnectionDetails {
+    let http_version = match response.version() {
+        Version::HTTP_09 => "HTTP/0.9",
+        Version::HTTP_10 => "HTTP/1.0",
+        Version::HTTP_11 => "HTTP/1.1",
+        Version::HTTP_2 => "HTTP/2",
+        Version::HTTP_3 => "HTTP/3",
+        _ => "Unavailable",
+    };
+    let tls = (response.url().scheme() == "https").then(|| {
+        let info = response.extensions().get::<TlsInfo>();
+        TlsDetails {
+            version: info
+                .and_then(TlsInfo::version)
+                .and_then(|version| match version {
+                    TlsVersion::TLS_1_0 => Some("TLS 1.0"),
+                    TlsVersion::TLS_1_1 => Some("TLS 1.1"),
+                    TlsVersion::TLS_1_2 => Some("TLS 1.2"),
+                    TlsVersion::TLS_1_3 => Some("TLS 1.3"),
+                    _ => None,
+                }),
+            verified: None,
+            certificate: info
+                .and_then(TlsInfo::peer_certificate)
+                .and_then(certificate_details),
+        }
+    });
+    ConnectionDetails {
+        http_version,
+        local_addr: response
+            .extensions()
+            .get::<HttpInfo>()
+            .map(HttpInfo::local_addr),
+        remote_addr: response.remote_addr(),
+        tls,
+    }
+}
+
+fn certificate_details(der: &[u8]) -> Option<CertificateDetails> {
+    let (_, certificate) = x509_parser::parse_x509_certificate(der).ok()?;
+    Some(CertificateDetails {
+        subject: certificate.subject().to_string(),
+        issuer: certificate.issuer().to_string(),
+        valid_from: certificate.validity().not_before.to_string(),
+        valid_until: certificate.validity().not_after.to_string(),
     })
 }
 

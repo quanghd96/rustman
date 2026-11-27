@@ -23,6 +23,8 @@ pub(crate) enum SendError {
     Mime(reqwest::Error),
     #[error("{}: {}", category(.0), root_cause(.0))]
     Transport(reqwest::Error),
+    #[error("Certificate verification failed: {}", root_cause(.0))]
+    Certificate(reqwest::Error),
     #[error("Read body: {0}")]
     ReadBody(reqwest::Error),
     #[error("Read body: error decoding response body: {0}")]
@@ -33,6 +35,34 @@ pub(crate) enum SendError {
         "Refused a redirect from HTTPS to plain HTTP, which would expose the request's headers, auth or body"
     )]
     InsecureRedirect,
+}
+
+impl SendError {
+    pub(crate) fn transport(error: reqwest::Error) -> Self {
+        if error.is_connect() && is_certificate_error(&error) {
+            Self::Certificate(error)
+        } else {
+            Self::Transport(error)
+        }
+    }
+}
+
+fn is_certificate_error(error: &(dyn Error + 'static)) -> bool {
+    let mut chain = Some(error);
+    while let Some(error) = chain {
+        if matches!(
+            error.downcast_ref::<rustls::Error>(),
+            Some(rustls::Error::InvalidCertificate(_))
+        ) {
+            return true;
+        }
+        chain = error
+            .downcast_ref::<std::io::Error>()
+            .and_then(std::io::Error::get_ref)
+            .map(|source| source as &dyn Error)
+            .or_else(|| error.source());
+    }
+    false
 }
 
 fn category(e: &reqwest::Error) -> &'static str {
@@ -64,7 +94,7 @@ fn root_cause(err: &dyn Error) -> String {
 mod tests {
     use std::fmt;
 
-    use super::root_cause;
+    use super::{is_certificate_error, root_cause};
 
     #[derive(Debug)]
     struct Chain(&'static str, Option<Box<Chain>>);
@@ -102,5 +132,17 @@ mod tests {
     #[test]
     fn single_error_returns_itself() {
         assert_eq!(root_cause(&Chain("boom", None)), "boom");
+    }
+
+    #[test]
+    fn a_certificate_error_is_distinct_from_other_tls_handshake_errors() {
+        let rejection = std::io::Error::other(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::UnknownIssuer,
+        ));
+        assert!(is_certificate_error(&rejection));
+        let handshake = std::io::Error::other(rustls::Error::AlertReceived(
+            rustls::AlertDescription::HandshakeFailure,
+        ));
+        assert!(!is_certificate_error(&handshake));
     }
 }

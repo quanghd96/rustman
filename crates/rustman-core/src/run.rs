@@ -11,7 +11,7 @@ use crate::domain::environment::AppEnvironment;
 use crate::domain::headers::Headers;
 use crate::domain::model::{Request, Scripts};
 use crate::domain::resolved::ResolvedRequest;
-use crate::domain::response::{HttpResponse, Redirect};
+use crate::domain::response::{ConnectionDetails, HttpResponse, Redirect};
 use crate::script::{ScriptHost, ScriptsOutcome, prepare, run_tests};
 
 /// How a request is sent.
@@ -50,6 +50,7 @@ pub struct Response {
     pub size: BodySize,
     /// The redirects followed to get here, in order.
     pub redirects: Vec<Redirect>,
+    pub connection: Option<ConnectionDetails>,
 }
 
 /// Body bytes read, as sent and once decoded. A truncated body counts only
@@ -217,6 +218,7 @@ impl From<Execution> for HttpResponse {
             body_stored: response.truncated,
             duration_ms: u64::try_from(execution.duration.as_millis()).unwrap_or(u64::MAX),
             redirects: response.redirects,
+            connection: response.connection,
             ..Self::default()
         };
         match decode_text(response.body, response.truncated) {
@@ -336,6 +338,7 @@ mod tests {
                 decoded: body.len(),
             },
             redirects: Vec::new(),
+            connection: None,
         }
     }
 
